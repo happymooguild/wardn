@@ -142,44 +142,47 @@ Flux would follow the same pattern via its `notification-controller` (Alerts + P
 - **Clock skew tolerance**: don't trust the caller's `timestamp` blindly for extreme values; sanity-check against server-received time.
 
 
-## 6. Storage - Postgres + ClickHouse
+## 6. Storage - Postgres only
 
-**Postgres - config and relational data.** Anything with foreign keys, frequent updates, or that needs real transactions (a user changes their password, an admin edits a dashboard, an app's rollback URL gets updated).
+**One store: Postgres.** wardn stores config, relational data, *and* deploy telemetry -
+there is no separate analytics database. The metrics backend (SigNoz) already holds the
+raw time series; wardn only keeps sparse before/after **snapshots** and small metadata,
+which is low-volume and relational. A second engine (ClickHouse) would be pure operational
+overhead for no benefit at this scale, so it's out.
 
 | Table | Purpose |
 |---|---|
-| `apps` | Registered apps: name, environment, hashed API key, rollback webhook URL (once §10 is resolved) |
-| `users`, `roles` | Auth and RBAC (`admin` / `member`) |
-| `dashboard_configs` | Per-user/team custom dashboards, built from the metric template library |
+| `apps` | Registered apps: name, environment, hashed API key |
+| `users`, `roles` | Auth and RBAC |
+| `permissions` | Per-user capability grants (e.g. can edit dashboards / can edit alerts) |
+| `dashboard_configs` | Per-user/team custom dashboards, built from the metric library |
 | `alert_configs` | Per (app, metric, channel): whether an alert is configured, and where it goes |
-| `metric_definitions` | Admin-managed library of named PromQL query templates, per backend |
-
-**ClickHouse - deploy telemetry.** Append-only, time-ordered, queried in bulk ("last 50 deploys of this app," "compare p99 across every version this month"). (worth noting SigNoz itself uses this same split internally - config in a relational store, telemetry in ClickHouse)
-
-| Table | Purpose |
-|---|---|
+| `metric_definitions` | Admin-managed library of named PromQL query templates |
 | `deploy_events` | One row per marker received: app, version, previous_version, environment, timestamp, source (ci/argocd) |
 | `metric_snapshots` | Before/after query results per deploy event |
 | `analyses` | LLM prompt + response per regression found, linked to a deploy event (automatic or on-demand) |
 
-Rough schema shape for `deploy_events` (the other two tables follow the same pattern - `MergeTree`, ordered and partitioned by time and app):
+Deploy history is queried "give me this app's deploys in time order," so a simple index on
+`(app, deployed_at)` covers it - no partitioning or specialised engine needed at demo scale.
 
 ```sql
 CREATE TABLE deploy_events (
-    app             String,
-    version         String,
-    previous_version String,
-    environment     String,
-    deployed_at     DateTime64(3),
-    source          Enum8('ci' = 1, 'argocd' = 2),
-    inserted_at     DateTime64(3) DEFAULT now64(3)
-)
-ENGINE = MergeTree
-PARTITION BY toYYYYMM(deployed_at)
-ORDER BY (app, deployed_at)
+    id               BIGSERIAL PRIMARY KEY,
+    app              TEXT        NOT NULL,
+    version          TEXT        NOT NULL,
+    previous_version TEXT,
+    environment      TEXT        NOT NULL,
+    deployed_at      TIMESTAMPTZ NOT NULL,
+    source           TEXT        NOT NULL CHECK (source IN ('ci', 'argocd')),
+    inserted_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (app, version, deployed_at)          -- idempotency: retries don't duplicate
+);
+CREATE INDEX ON deploy_events (app, deployed_at DESC);
 ```
 
-`ORDER BY (app, deployed_at)` matches the actual query pattern - almost everything is "give me this app's history in time order." `PARTITION BY toYYYYMM` keeps old partitions droppable later if retention limits are ever needed, without touching the rest of the table.
+`metric_snapshots` and `analyses` are plain Postgres tables too, snapshot payloads held in
+`JSONB`. If deploy volume ever outgrows a single Postgres (not a demo concern), revisit a
+dedicated telemetry store then - see `todo.md`.
 
 ## 7. Metrics abstraction
 
@@ -195,22 +198,34 @@ One PromQL-over-HTTP implementation, pointed at whichever backend the app config
 
 Triggered when the before/after metric diff crosses a configured threshold and then the user opts for it - not on every deploy. Given the before/after metrics, logs, and traces for the same windows, the model is asked to point at a likely cause. Scoped to SigNoz-sourced logs/traces only for now.
 
-## 9. Rollback - TODO, not yet designed
+## 9. Rollback - TODO (deferred), direction decided
 
-One thing is settled: **wardn will never have direct cluster access**, regardless of how this ends up working. Everything else here is open.
+Deferred past the initial build, but the approach is now settled: **wardn is an
+action-taker.** When an alert flagged for auto-rollback fires, wardn performs a
+`kubectl rollout undo` on the affected Deployment, reverting it to the previous
+revision. A manual "roll back" button in the UI is the first cut; the auto path
+layers the same action onto an alert.
 
-Ruled out so far, and why:
+This means wardn holds **scoped cluster access**: a ServiceAccount + Role/RoleBinding
+granting rollback rights (`get`/`patch` on the relevant Deployments, plus the
+`deployments/rollback`-equivalent) in the namespaces it manages. Access is the minimum
+needed to undo a rollout - not broad cluster admin.
 
-- **"CI has a rollback job" assumption** - not universal. Not every team has dedicated rollback logic in CI.
-- **Plain `git revert` for GitOps** - breaks if anyone's pushed a commit since the deploy (revert can conflict), and still needs a PR merged unless the team already has an auto-merge bot for image bumps.
+Enablement is explicit and per-app:
 
-Directions worth exploring in a follow-up discussion, not decided yet:
+- The team creates the ServiceAccount + Role/RoleBinding that gives wardn rollback access.
+- Only then does the per-alert **auto-rollback** checkbox become selectable; until the
+  RBAC is in place it stays greyed out ("no rollback method configured for this app").
 
-- Redeploy-forward instead of revert-back: re-trigger the existing deploy pipeline with `previous_version` as a parameter (relies on the pipeline already supporting a parameterized/manual trigger - not guaranteed either).
-- For GitOps: overwrite the image tag field directly (not a diff-based revert) so it applies cleanly regardless of history - but still need to solve the merge-gate problem for teams without an auto-merge bot.
-- Possibly two honest tiers of support: fully automatic where a team already has an auto-merge path they trust, and PR-opened-with-a-ping where they don't - rather than one story that overclaims for everyone.
+Guardrails (detailed in `todo.md`): a circuit-breaker so wardn never rolls the same app
+back twice in a short window (avoids flapping between versions), a sustained-regression
+confidence gate, a dry-run / notify-only mode, an audit-log + alert on every rollback,
+and a heavier capability grant to enable it than to merely edit alerts.
 
-Come back to this before building it - do not implement rollback against the design above, it's not final.
+**Known limitation to revisit:** for GitOps teams, a live `rollout undo` fights ArgoCD's
+self-heal (Git remains the source of truth and will re-sync the bad version). The
+action-taker model is correct for direct-CI/kubectl teams; the GitOps story needs its
+own follow-up before it's shipped to those users.
 
 ## 10. Auth & RBAC
 
