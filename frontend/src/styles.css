@@ -860,3 +860,60 @@ select.pill:hover { border-color: var(--border-hover); }
 .ai-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; }
 .ai-toggle input { accent-color: var(--accent-2); cursor: pointer; }
 .ai-toggle input:disabled { cursor: not-allowed; }
+
+/* --- Add app / service dialog --- */
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.add-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-bg); color: var(--accent);
+  border: 1px solid var(--accent-border); border-radius: 8px;
+  padding: 7px 13px; font-family: var(--font-sans); font-size: 12.5px;
+  font-weight: 600; cursor: pointer; transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.add-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
+.add-btn .plus { font-size: 15px; line-height: 1; }
+
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; backdrop-filter: blur(2px);
+}
+.modal {
+  background: var(--panel); border: 1px solid var(--border-2);
+  border-radius: 14px; width: 100%; max-width: 460px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4); overflow: hidden;
+}
+.modal-head { padding: 18px 20px 0; }
+.modal-title { font-family: var(--font-display); font-size: 17px; color: var(--text-bright); }
+.modal-sub { margin-top: 4px; font-size: 12.5px; color: var(--text-muted); }
+.modal-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.modal-err { color: var(--danger); font-size: 12.5px; }
+
+.key-reveal {
+  background: var(--bg); border: 1px solid var(--accent-border);
+  border-radius: 8px; padding: 11px 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.key-reveal code {
+  flex: 1; font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--text-code); word-break: break-all; user-select: all;
+}
+.key-warn {
+  font-size: 12px; color: var(--text-muted);
+  background: var(--danger-bg); border: 1px solid var(--danger-border);
+  border-radius: 8px; padding: 9px 11px;
+}
+.key-warn b { color: var(--danger); }
+.copy-btn { flex-shrink: 0; }
+
+/* --- Deploys: services list + drill-in --- */
+.back-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-family: var(--font-sans); font-size: inherit;
+  letter-spacing: inherit; text-transform: none;
+}
+.back-link:hover { color: var(--accent-hover); }
+.apps-table .app-name { font-weight: 600; color: var(--text-bright); }
+.apps-table tbody tr:hover .app-name { color: var(--accent); }

@@ -1,50 +1,32 @@
 import { useEffect, useState } from 'react'
-import { fetchDeploys, fetchDeploy } from '../api.js'
-import AskAI from './AskAI.jsx'
+import { fetchDeploys, createApp } from '../api.js'
+import AddAppModal from './AddAppModal.jsx'
+import AppDeploys from './AppDeploys.jsx'
 
 const POLL_MS = 5000
 
-export default function Deploys({ app, onAuthError }) {
-  const [deploys, setDeploys] = useState([])
-  const [selectedId, setSelectedId] = useState(null)
-  const [detail, setDetail] = useState(null)
-  const [error, setError] = useState('')
+// Deploys landing page: a list of every registered service (not a single-app
+// view like the dashboard). Each row shows the app's latest deploy at a glance;
+// clicking one drills into its full deploy history + analysis. New services are
+// added right here.
+export default function Deploys({ apps, onAuthError, onAppCreated }) {
+  const [opened, setOpened] = useState(null) // app name being drilled into
+  const [showAdd, setShowAdd] = useState(false)
+  const [latest, setLatest] = useState({}) // app name -> latest deploy | null
 
+  // Pull each app's most recent deploy so the list can show status at a glance.
   useEffect(() => {
-    if (!app) return
+    if (opened || apps.length === 0) return
     let alive = true
     const load = async () => {
       try {
-        const list = await fetchDeploys(app)
-        if (!alive) return
-        setDeploys(list)
-        setError('')
-        if (!selectedId && list.length) setSelectedId(list[0].id)
-      } catch (e) {
-        if (alive) {
-          setError(String(e))
-          onAuthError?.(e)
-        }
-      }
-    }
-    load()
-    const id = setInterval(load, POLL_MS)
-    return () => {
-      alive = false
-      clearInterval(id)
-    }
-  }, [app])
-
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null)
-      return
-    }
-    let alive = true
-    const load = async () => {
-      try {
-        const d = await fetchDeploy(selectedId)
-        if (alive) setDetail(d)
+        const entries = await Promise.all(
+          apps.map(async (a) => {
+            const list = await fetchDeploys(a.name)
+            return [a.name, list[0] || null]
+          })
+        )
+        if (alive) setLatest(Object.fromEntries(entries))
       } catch (e) {
         if (alive) onAuthError?.(e)
       }
@@ -55,132 +37,76 @@ export default function Deploys({ app, onAuthError }) {
       alive = false
       clearInterval(id)
     }
-  }, [selectedId])
+  }, [apps, opened])
+
+  if (opened) {
+    return <AppDeploys appName={opened} onBack={() => setOpened(null)} onAuthError={onAuthError} />
+  }
 
   return (
     <div className="content-inner fade-in">
-      <div className="section-label">DEPLOY EVENTS · {app || '—'}</div>
-
-      <div className="split">
-        <div className="panel">
-          <div className="panel-head">
-            <span className="panel-title">Recent deploys</span>
-          </div>
-          <div className="panel-body" style={{ padding: 0 }}>
-            {deploys.length === 0 ? (
-              <div className="empty" style={{ height: 160 }}>
-                No deploy markers yet — POST /api/v1/deployments
-              </div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Version</th>
-                    <th>Status</th>
-                    <th>Source</th>
-                    <th>When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deploys.map((d) => (
-                    <tr
-                      key={d.id}
-                      className={selectedId === d.id ? 'on' : ''}
-                      onClick={() => setSelectedId(d.id)}
-                    >
-                      <td className="mono">{d.version}</td>
-                      <td>
-                        <span className={`badge status-${d.status}`}>{d.status}</span>
-                      </td>
-                      <td>{d.source}</td>
-                      <td className="muted">{formatTime(d.deployed_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <span className="panel-title">
-              Detail ·{' '}
-              <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
-                {detail?.deploy?.version || '—'}
-              </span>
-            </span>
-          </div>
-          <div className="panel-body">
-            {!detail ? (
-              <div className="empty" style={{ height: 160 }}>
-                Select a deploy
-              </div>
-            ) : (
-              <>
-                <div className="meta-grid">
-                  <Meta label="Previous" value={detail.deploy.previous_version || 'baseline'} />
-                  <Meta label="Environment" value={detail.deploy.environment} />
-                  <Meta label="Status" value={detail.deploy.status} />
-                  <Meta
-                    label="Failure"
-                    value={detail.deploy.failure_reason || '—'}
-                  />
-                </div>
-                <div className="section-label" style={{ marginTop: 18 }}>
-                  BEFORE / AFTER SNAPSHOTS
-                </div>
-                {(detail.snapshots || []).length === 0 ? (
-                  <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>
-                    Snapshots appear after the analyzer finishes the after-window.
-                  </div>
-                ) : (
-                  <div className="snap-grid">
-                    {detail.snapshots.map((s) => (
-                      <div key={s.metric_key} className={`snap-card${s.degraded ? ' bad' : ''}`}>
-                        <div className="snap-key">{s.metric_key}</div>
-                        <div className="snap-row">
-                          <span>before</span>
-                          <b>{fmtNum(s.before_value)}</b>
-                        </div>
-                        <div className="snap-row">
-                          <span>after</span>
-                          <b>{fmtNum(s.after_value)}</b>
-                        </div>
-                        <div className="snap-row">
-                          <span>delta</span>
-                          <b>{s.delta_pct != null ? `${s.delta_pct.toFixed(1)}%` : '—'}</b>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <AskAI
-                  deployId={detail.deploy.id}
-                  initial={detail.analysis}
-                  onAuthError={onAuthError}
-                />
-              </>
-            )}
-          </div>
-        </div>
+      <div className="section-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>SERVICES · {apps.length}</span>
+        <button type="button" className="add-btn" onClick={() => setShowAdd(true)}>
+          <span className="plus">+</span> Add app / service
+        </button>
       </div>
 
-      {error && (
-        <div className="empty" style={{ height: 'auto', color: 'var(--danger)' }}>
-          {error}
-        </div>
+      {showAdd && (
+        <AddAppModal
+          onClose={() => setShowAdd(false)}
+          onCreate={createApp}
+          onCreated={(name) => onAppCreated?.(name)}
+        />
       )}
-    </div>
-  )
-}
 
-function Meta({ label, value }) {
-  return (
-    <div className="meta">
-      <span>{label}</span>
-      <b>{value}</b>
+      <div className="panel">
+        <div className="panel-body" style={{ padding: 0 }}>
+          {apps.length === 0 ? (
+            <div className="empty" style={{ height: 160 }}>
+              No services yet — click “Add app / service” to register one.
+            </div>
+          ) : (
+            <table className="data-table apps-table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Environment</th>
+                  <th>Latest deploy</th>
+                  <th>Status</th>
+                  <th>When</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {apps.map((a) => {
+                  const d = latest[a.name]
+                  return (
+                    <tr key={a.id} onClick={() => setOpened(a.name)}>
+                      <td>
+                        <span className="app-name">{a.name}</span>
+                      </td>
+                      <td className="muted">{a.environment}</td>
+                      <td className="mono">{d ? d.version : '—'}</td>
+                      <td>
+                        {d ? (
+                          <span className={`badge status-${d.status}`}>{d.status}</span>
+                        ) : (
+                          <span className="muted">no deploys</span>
+                        )}
+                      </td>
+                      <td className="muted">{d ? formatTime(d.deployed_at) : '—'}</td>
+                      <td className="muted" style={{ textAlign: 'right' }}>
+                        View →
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -192,9 +118,4 @@ function formatTime(iso) {
   } catch {
     return iso
   }
-}
-
-function fmtNum(v) {
-  if (v == null) return '—'
-  return typeof v === 'number' ? v.toFixed(2) : String(v)
 }

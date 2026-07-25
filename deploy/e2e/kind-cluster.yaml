@@ -1,0 +1,12 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: wardn-e2e
+nodes:
+  - role: control-plane
+    # Only the wardn dashboard is mapped to the host. SigNoz, ArgoCD, and Gitea
+    # are reached with `kubectl port-forward` (see the README) to keep the kind
+    # config small and avoid NodePort collisions.
+    extraPortMappings:
+      - containerPort: 30080   # wardn-frontend NodePort
+        hostPort: 8088
+        protocol: TCP

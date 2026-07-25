@@ -5,10 +5,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	_ "github.com/lib/pq"
 )
+
+// ErrAppExists is returned by CreateApp when the name is already taken, so the
+// API can surface a 409 instead of silently rotating an existing app's key.
+var ErrAppExists = errors.New("app already exists")
 
 type Store struct{ db *sql.DB }
 
@@ -458,6 +463,31 @@ func (s *Store) SeedApp(ctx context.Context, name, apiKeyHash string) (int64, er
 		 ($1, 'latency_p99', true), ($1, 'error_rate', true)
 		 ON CONFLICT DO NOTHING`, id)
 	return id, err
+}
+
+// CreateApp inserts a brand-new app with its hashed key and default enabled
+// metrics, then returns the full row. Unlike SeedApp it does not upsert: a name
+// that already exists yields ErrAppExists rather than overwriting the key.
+func (s *Store) CreateApp(ctx context.Context, name, apiKeyHash string) (App, error) {
+	if _, err := s.AppByName(ctx, name); err == nil {
+		return App{}, ErrAppExists
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return App{}, err
+	}
+	var id int64
+	if err := s.db.QueryRowContext(ctx,
+		`INSERT INTO apps (name, api_key_hash, signoz_service_name)
+		 VALUES ($1, $2, $1) RETURNING id`,
+		name, apiKeyHash).Scan(&id); err != nil {
+		return App{}, err
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO app_metrics (app_id, metric_key, enabled) VALUES
+		 ($1, 'latency_p99', true), ($1, 'error_rate', true)
+		 ON CONFLICT DO NOTHING`, id); err != nil {
+		return App{}, err
+	}
+	return s.AppByID(ctx, id)
 }
 
 func (s *Store) SeedUser(ctx context.Context, username, passwordHash, role string) error {
