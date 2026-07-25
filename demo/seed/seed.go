@@ -9,6 +9,7 @@ package seed
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -16,16 +17,49 @@ import (
 	"wardn/store"
 )
 
-// verSpec places one version: how long ago it was deployed and its latency mean.
-type verSpec struct {
+// versionSchedule fixes how long ago each version was deployed. Deploy times are
+// shared across services (so the time-range selector behaves the same); only the
+// latency profile differs per service (see profileFor).
+var versionSchedule = []struct {
 	name    string
 	daysAgo float64
-	mean    float64
+}{
+	{"v1.0.0", 200}, // only visible at "last 1 year"+
+	{"v1.0.1", 75},  // last 3 months
+	{"v1.0.2", 45},  // last 2 months
+	{"v1.0.3", 22},  // last 1 month
+	{"v1.0.4", 10},  // last 2 weeks
+	{"v1.0.5", 6},   // last 1 week
+	{"v1.0.6", 4},   // last 5 days
+	{"v1.0.7", 2.5}, // last 3 days
+	{"v1.0.8", 1.5}, // last 2 days
+	{"v1.0.9", 0.5}, // last 1 day
 }
 
-// Run inserts each version's samples. Idempotent: it no-ops if versioned data
-// already exists for the app+metric. Returns the number of samples inserted.
-func Run(ctx context.Context, st *store.Store, appID int64, appName, metric string) (int, error) {
+type profile struct {
+	base      float64      // baseline latency of the first version
+	step      float64      // per-version drift
+	regressed map[int]bool // which version indexes are regressed
+	regMean   float64      // latency of a regressed version
+}
+
+// profileFor gives each service a distinct latency signature so switching apps
+// on the dashboard shows visibly different data.
+func profileFor(variant int) profile {
+	switch variant % 2 {
+	case 1:
+		// e.g. payments-service: slower baseline, later regressions, bigger spike
+		return profile{base: 92, step: 2.6, regressed: map[int]bool{5: true, 8: true}, regMean: 260}
+	default:
+		// e.g. checkout-service: the original profile
+		return profile{base: 52, step: 1.8, regressed: map[int]bool{3: true, 7: true}, regMean: 155}
+	}
+}
+
+// Run inserts each version's samples for one service. Idempotent: it no-ops if
+// versioned data already exists for the app+metric. `variant` selects the latency
+// profile. Returns the number of samples inserted.
+func Run(ctx context.Context, st *store.Store, appID int64, appName, metric string, variant int) (int, error) {
 	const (
 		samplesPerVer = 60
 		windowMinutes = 30 // each version's samples span this long
@@ -39,44 +73,35 @@ func Run(ctx context.Context, st *store.Store, appID int64, appName, metric stri
 		return 0, nil // already seeded
 	}
 
-	// One version lands in each time-range bucket, so every step of the range
-	// dropdown reveals one more. v1.0.3 and v1.0.7 are deliberately regressed.
-	specs := []verSpec{
-		{"v1.0.0", 200, 52},  // only visible at "last 1 year"+
-		{"v1.0.1", 75, 55},   // last 3 months
-		{"v1.0.2", 45, 57},   // last 2 months
-		{"v1.0.3", 22, 150},  // last 1 month — regressed
-		{"v1.0.4", 10, 60},   // last 2 weeks
-		{"v1.0.5", 6, 62},    // last 1 week
-		{"v1.0.6", 4, 64},    // last 5 days
-		{"v1.0.7", 2.5, 165}, // last 3 days — regressed
-		{"v1.0.8", 1.5, 66},  // last 2 days
-		{"v1.0.9", 0.5, 68},  // last 1 day
-	}
-
-	rng := rand.New(rand.NewSource(1337))
+	prof := profileFor(variant)
+	rng := rand.New(rand.NewSource(int64(1337 + variant*101)))
 	now := time.Now().UTC()
 	gap := time.Duration(windowMinutes) * time.Minute / samplesPerVer
 
-	samples := make([]store.Sample, 0, len(specs)*samplesPerVer)
-	for _, spec := range specs {
+	samples := make([]store.Sample, 0, len(versionSchedule)*samplesPerVer)
+	for i, spec := range versionSchedule {
+		mean := prof.base + float64(i)*prof.step
+		if prof.regressed[i] {
+			mean = prof.regMean
+		}
+		std := mean * 0.12
 		start := now.Add(-time.Duration(spec.daysAgo * 24 * float64(time.Hour)))
-		std := spec.mean * 0.12
-		for i := 0; i < samplesPerVer; i++ {
-			val := spec.mean + rng.NormFloat64()*std
+
+		for j := 0; j < samplesPerVer; j++ {
+			val := mean + rng.NormFloat64()*std
 			if val < 5 {
 				val = 5
 			}
 			samples = append(samples, store.Sample{
 				Version: spec.name,
 				Value:   math.Round(val*10) / 10,
-				TS:      start.Add(time.Duration(i) * gap),
+				TS:      start.Add(time.Duration(j) * gap),
 			})
 		}
 	}
 
 	if err := st.InsertSamples(ctx, appID, metric, samples); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("insert samples: %w", err)
 	}
 	return len(samples), nil
 }

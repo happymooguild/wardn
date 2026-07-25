@@ -129,8 +129,9 @@ export default function VersionChart({ versions, selected, onSelect, series = 'p
       {hover && (
         <div className="vtip" style={{ left: hover.left, top: hover.top }}>
           <div className="vtip-v">{versions[hover.idx].version}</div>
+          <div className="vtip-r"><span>p90</span><b>{Math.round(versions[hover.idx].p90)}ms</b></div>
+          <div className="vtip-r"><span>p95</span><b>{Math.round(versions[hover.idx].p95)}ms</b></div>
           <div className="vtip-r"><span>p99</span><b>{Math.round(versions[hover.idx].p99)}ms</b></div>
-          <div className="vtip-r"><span>p50</span><b>{Math.round(versions[hover.idx].p50)}ms</b></div>
           <div className="vtip-r"><span>released</span><b>{fmtReleaseUTC(versions[hover.idx].first_ts)}</b></div>
           <div className="vtip-hint">click to inspect →</div>
         </div>

@@ -98,7 +98,7 @@ until SigNoz is configured.
 | `ALLOW_LOCAL_WEBHOOKS` | Allow localhost webhook URLs (dev default true) |
 | `ANALYZER_POLL_INTERVAL` | Job claim interval (default `5s`) |
 | `CLOCK_SKEW_MAX` | Marker timestamp tolerance (default `24h`) |
-| `SEED_APP` / `SEED_API_KEY` | Seeded app + key |
+| `SEED_APPS` | Seeded services, `"name:key,name:key"` |
 
 Demo PromQL templates query `wardn_demo_latency_ms` / `wardn_demo_error_rate`
 (from sample-app OTLP). Swap `metric_definitions.promql_template` for real APM
@@ -116,3 +116,11 @@ deploy/recipes/               CI curl + ArgoCD Notifications
 deploy/helm/ deploy/kind/
 docs/
 ```
+## Configuration
+
+Defaults live in [`deploy/helm/wardn/values.yaml`](deploy/helm/wardn/values.yaml)
+(Helm) and `docker-compose.yml` (Compose). Two services are seeded out of the box —
+`checkout-service` and `payments-service` — each with its own API key and a live
+emitter, so the dashboard's app selector has something to switch between. Add or
+change them via `SEED_APPS` (`"name:key,name:key"`) + a matching sample-app; keys are
+dev-only, swap before anything real.

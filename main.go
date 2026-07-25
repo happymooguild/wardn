@@ -31,21 +31,25 @@ func main() {
 	if err := st.Migrate(ctx); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
-	appID, err := st.SeedApp(ctx, cfg.SeedApp, api.HashKey(cfg.SeedAPIKey))
-	if err != nil {
-		log.Fatalf("seed app: %v", err)
-	}
-	log.Printf("migrated + seeded app %q (id %d)", cfg.SeedApp, appID)
+	log.Print("migrated")
 
-	if cfg.SeedDemo {
-		n, err := seed.Run(ctx, st, appID, cfg.SeedApp, cfg.SeedMetric)
+	// Seed each service + (on first boot) its synthetic version history. The
+	// index becomes the demo "variant" so different services look distinct.
+	for i, as := range cfg.SeedApps {
+		appID, err := st.SeedApp(ctx, as.Name, api.HashKey(as.Key))
 		if err != nil {
-			log.Fatalf("seed demo data: %v", err)
+			log.Fatalf("seed app %q: %v", as.Name, err)
 		}
-		if n > 0 {
-			log.Printf("seeded %d synthetic samples across demo versions", n)
-		} else {
-			log.Print("demo data already present, skipping seed")
+		log.Printf("seeded app %q (id %d)", as.Name, appID)
+
+		if cfg.SeedDemo {
+			n, err := seed.Run(ctx, st, appID, as.Name, cfg.SeedMetric, i)
+			if err != nil {
+				log.Fatalf("seed demo data for %q: %v", as.Name, err)
+			}
+			if n > 0 {
+				log.Printf("seeded %d synthetic samples for %q", n, as.Name)
+			}
 		}
 	}
 

@@ -2,11 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import StatTile from './components/StatTile.jsx'
 import VersionChart from './components/VersionChart.jsx'
-import LatencyChart from './components/LatencyChart.jsx'
 import Login from './components/Login.jsx'
 import Deploys from './components/Deploys.jsx'
 import Alerting from './components/Alerting.jsx'
-import { fetchApps, fetchVersions, fetchVersionSeries, me, logout } from './api.js'
+import { fetchApps, fetchVersions, me, logout } from './api.js'
 
 const POLL_MS = 5000
 
@@ -25,6 +24,12 @@ const RANGES = [
   ['all', 'All time'],
 ]
 
+const PAGE_META = {
+  dashboards: { title: 'Latency by version', sub: 'latency percentiles across every deploy' },
+  deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
+  alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
+}
+
 export default function App() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
@@ -34,7 +39,6 @@ export default function App() {
   const [app, setApp] = useState('')
   const [versions, setVersions] = useState([])
   const [selected, setSelected] = useState('')
-  const [detail, setDetail] = useState([])
   const [range, setRange] = useState('1d')
   const [error, setError] = useState('')
 
@@ -43,6 +47,7 @@ export default function App() {
     selectedRef.current = selected
   }, [selected])
 
+  // On mount, ask the backend who we are. 401 -> show the login screen.
   useEffect(() => {
     me()
       .then((u) => setUser(u))
@@ -50,11 +55,13 @@ export default function App() {
       .finally(() => setChecking(false))
   }, [])
 
+  // A 401 from any data call means the session lapsed — bounce to login.
   const onAuthError = (e) => {
     if (String(e).includes('401')) setUser(null)
     else setError(String(e))
   }
 
+  // Load apps once signed in.
   useEffect(() => {
     if (!user) return
     fetchApps()
@@ -65,7 +72,7 @@ export default function App() {
       .catch(onAuthError)
   }, [user])
 
-  // Poll per-version stats for the selected app + time range.
+  // Poll per-version stats for the selected app + range (dashboards page only).
   useEffect(() => {
     if (!user || !app || page !== 'dashboards') return
     let alive = true
@@ -95,30 +102,9 @@ export default function App() {
     }
   }, [user, app, page, range])
 
-  // Poll raw samples for the selected version, within the time range.
-  useEffect(() => {
-    if (!user || !app || !selected || page !== 'dashboards') return
-    let alive = true
-    const load = async () => {
-      try {
-        const pts = await fetchVersionSeries(app, selected, range)
-        if (alive) setDetail(pts)
-      } catch (e) {
-        if (alive) onAuthError(e)
-      }
-    }
-    load()
-    const id = setInterval(load, POLL_MS)
-    return () => {
-      alive = false
-      clearInterval(id)
-    }
-  }, [user, app, selected, page, range])
-
   const selIdx = useMemo(() => versions.findIndex((v) => v.version === selected), [versions, selected])
   const selVer = selIdx >= 0 ? versions[selIdx] : null
   const prevVer = selIdx > 0 ? versions[selIdx - 1] : null
-  const rawStats = useMemo(() => computeStats(detail), [detail])
 
   async function handleLogout() {
     await logout()
@@ -128,15 +114,15 @@ export default function App() {
     setVersions([])
     setSelected('')
     selectedRef.current = ''
-    setDetail([])
     setError('')
   }
 
+  // --- gate ---
   if (checking) return <div className="login-wrap" />
   if (!user) return <Login onSuccess={setUser} />
 
-  const crumb =
-    page === 'deploys' ? 'Deploys' : page === 'alerting' ? 'Alerting' : 'Latency by version'
+  const meta = PAGE_META[page] || PAGE_META.dashboards
+  const sub = page === 'dashboards' ? `${meta.sub}${app ? ` · ${app}` : ''}` : meta.sub
 
   const pctTiles = [
     ['P50', selVer?.p50, prevVer?.p50],
@@ -154,12 +140,12 @@ export default function App() {
           <div className="crumbs">
             <span>Home</span>
             <span className="sep">/</span>
-            <span className="here">{crumb}</span>
+            <span className="here">{meta.title}</span>
           </div>
           <div className="header-main">
             <div className="header-title">
-              <h1>Latency by version</h1>
-              <span className="header-sub">p99 across every deploy{app ? ` · ${app}` : ''}</span>
+              <h1>{meta.title}</h1>
+              <span className="header-sub">{sub}</span>
             </div>
             <div className="header-controls">
               <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
@@ -170,17 +156,21 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              <select className="pill" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Time range">
-                {RANGES.map(([v, label]) => (
-                  <option key={v} value={v}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <span className="pill live">
-                <span className="dot" />
-                live
-              </span>
+              {page === 'dashboards' && (
+                <>
+                  <select className="pill" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Time range">
+                    {RANGES.map(([v, label]) => (
+                      <option key={v} value={v}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pill live">
+                    <span className="dot" />
+                    live
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -192,6 +182,7 @@ export default function App() {
             <div className="content-inner fade-in">
               <div className="section-label">
                 SELECTED VERSION · <span style={{ color: 'var(--accent)' }}>{selected || '—'}</span>
+                <span className="section-hint">click a point on any chart to inspect a version</span>
               </div>
               <div className="tiles">
                 {pctTiles.map(([label, cur, prev]) => {
@@ -229,32 +220,36 @@ export default function App() {
                   </span>
                 </div>
                 <div className="panel-body">
-                  <VersionChart versions={versions} selected={selected} onSelect={setSelected} />
+                  <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p99" />
                 </div>
               </div>
 
-              <div className="panel">
-                <div className="panel-head">
-                  <span className="panel-title">
-                    Selected ·{' '}
-                    <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{selected || '—'}</span> ·
-                    latency over time
-                  </span>
-                  <span className="legend">
-                    <span className="swatch" />
-                    latency_ms
-                  </span>
+              <div className="chart-row">
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Latency by version · p95</span>
+                    <span className="legend">
+                      <span className="swatch" />
+                      p95 per version
+                    </span>
+                  </div>
+                  <div className="panel-body">
+                    <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p95" />
+                  </div>
                 </div>
-                <div className="panel-body">
-                  <LatencyChart points={detail} />
-                </div>
-              </div>
 
-              <div className="tiles">
-                <StatTile label="LATEST" value={rawStats.latest} sub={selected || '—'} />
-                <StatTile label="AVERAGE" value={rawStats.avg} sub="mean of samples" />
-                <StatTile label="PEAK" value={rawStats.max} sub="max sample" />
-                <StatTile label="SAMPLES" value={rawStats.count} sub="data points" />
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Latency by version · p90</span>
+                    <span className="legend">
+                      <span className="swatch" />
+                      p90 per version
+                    </span>
+                  </div>
+                  <div className="panel-body">
+                    <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p90" />
+                  </div>
+                </div>
               </div>
 
               {error && (
@@ -268,20 +263,4 @@ export default function App() {
       </div>
     </div>
   )
-}
-
-function computeStats(points) {
-  if (!points || points.length === 0) {
-    return { latest: '—', avg: '—', max: '—', count: '0' }
-  }
-  const values = points.map((p) => p.value)
-  const latest = values[values.length - 1]
-  const avg = values.reduce((a, b) => a + b, 0) / values.length
-  const max = Math.max(...values)
-  return {
-    latest: `${latest.toFixed(1)}ms`,
-    avg: `${avg.toFixed(1)}ms`,
-    max: `${max.toFixed(1)}ms`,
-    count: String(points.length),
-  }
 }
