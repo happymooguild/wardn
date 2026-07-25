@@ -30,13 +30,11 @@ spec:
                 secretKeyRef:
                   name: wardn-secrets
                   key: database-url
-            - name: SEED_APP
-              value: {{ .Values.app.name | quote }}
-            - name: SEED_API_KEY
+            - name: SEED_APPS
               valueFrom:
                 secretKeyRef:
                   name: wardn-secrets
-                  key: api-key
+                  key: seed-apps
           readinessProbe:
             httpGet:
               path: /healthz

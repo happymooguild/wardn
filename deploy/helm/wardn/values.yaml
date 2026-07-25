@@ -3,11 +3,16 @@
 
 imagePullPolicy: IfNotPresent
 
-# The app the sample-app posts as, and the API key it authenticates with.
-# The backend seeds this app + key on startup.
+# The services to run. The backend seeds each app + key; one sample-app emitter
+# is deployed per service, and the dashboard's app selector switches between them.
 app:
-  name: checkout-service
-  apiKey: wardn_dev_key_checkout
+  services:
+    - name: checkout-service
+      apiKey: wardn_dev_key_checkout
+      baseLatencyMs: "60"
+    - name: payments-service
+      apiKey: wardn_dev_key_payments
+      baseLatencyMs: "95"
 
 postgres:
   image: postgres:16-alpine
@@ -35,7 +40,6 @@ sampleApp:
   image: wardn-sample-app:dev
   version: "v1.0.10"   # newest version, after the seeded v1.0.0..v1.0.9 history
   interval: "5s"
-  baseLatencyMs: "60"
   jitterMs: "12"
   # Flip to true (and `helm upgrade`) to simulate a bad deploy — the latency
   # line on the dashboard jumps by regressionAddMs.

@@ -25,8 +25,8 @@ services:
     build: .
     environment:
       DATABASE_URL: postgres://wardn:wardn@wardn-postgres:5432/wardn?sslmode=disable
-      SEED_APP: checkout-service
-      SEED_API_KEY: wardn_dev_key_checkout
+      # One entry per service: "name:apikey,name:apikey"
+      SEED_APPS: "checkout-service:wardn_dev_key_checkout,payments-service:wardn_dev_key_payments"
     ports:
       - "8080:8080"
     depends_on:
@@ -52,5 +52,21 @@ services:
       JITTER_MS: "12"
       REGRESSED: "false"
       REGRESSION_ADD_MS: "140"
+    depends_on:
+      - wardn-backend
+
+  # Second service — a distinct app the dashboard can switch to.
+  wardn-sample-app-payments:
+    build: ./demo/sample-app
+    environment:
+      WARDN_URL: http://wardn-backend:8080
+      WARDN_API_KEY: wardn_dev_key_payments
+      APP_NAME: payments-service
+      APP_VERSION: v1.0.10
+      INTERVAL: 3s
+      BASE_LATENCY_MS: "95"
+      JITTER_MS: "15"
+      REGRESSED: "false"
+      REGRESSION_ADD_MS: "180"
     depends_on:
       - wardn-backend

@@ -58,6 +58,17 @@ improvements surfaced while planning. Grouped by why they're deferred.
   from the caller — for the demo, consider `(app, version)` so a re-run doesn't create
   a second event.
 
+## Dashboard (skeleton) follow-ups
+
+- **Expand a chart to full screen** — clicking a latency panel (p95 / p99) should
+  open it full-screen for a closer look, then collapse back. Deferred; the
+  side-by-side panels ship first.
+- **Percentiles come from the metrics backend, not raw samples.** The skeleton
+  computes p95/p99 in Postgres from the sample-app's readings; in the real product
+  these are queried from SigNoz/Prometheus (which already aggregate). The raw
+  per-sample "latency over time" panel was removed because CI/GitOps never sends
+  per-request data — only the deploy marker.
+
 ## Open questions carried from design-doc §13
 
 1. Verify SigNoz's PromQL query-API compatibility **before** building the metrics

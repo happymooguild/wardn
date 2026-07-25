@@ -1,46 +1,49 @@
 {{- if .Values.sampleApp.enabled }}
+{{- range .Values.app.services }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wardn-sample-app
+  name: wardn-sample-app-{{ .name }}
   labels:
-    {{- include "wardn.labels" . | nindent 4 }}
-    app.kubernetes.io/component: sample-app
+    {{- include "wardn.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: sample-app-{{ .name }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/component: sample-app
+      app.kubernetes.io/component: sample-app-{{ .name }}
   template:
     metadata:
       labels:
-        {{- include "wardn.labels" . | nindent 8 }}
-        app.kubernetes.io/component: sample-app
+        {{- include "wardn.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: sample-app-{{ .name }}
     spec:
       containers:
         - name: sample-app
-          image: {{ .Values.sampleApp.image }}
-          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          image: {{ $.Values.sampleApp.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
           env:
             - name: WARDN_URL
-              value: "http://wardn-backend:{{ .Values.backend.port }}"
+              value: "http://wardn-backend:{{ $.Values.backend.port }}"
             - name: WARDN_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: wardn-secrets
-                  key: api-key
+                  key: api-key-{{ .name }}
             - name: APP_NAME
-              value: {{ .Values.app.name | quote }}
+              value: {{ .name | quote }}
             - name: APP_VERSION
-              value: {{ .Values.sampleApp.version | quote }}
+              value: {{ $.Values.sampleApp.version | quote }}
             - name: INTERVAL
-              value: {{ .Values.sampleApp.interval | quote }}
+              value: {{ $.Values.sampleApp.interval | quote }}
             - name: BASE_LATENCY_MS
-              value: {{ .Values.sampleApp.baseLatencyMs | quote }}
+              value: {{ .baseLatencyMs | quote }}
             - name: JITTER_MS
-              value: {{ .Values.sampleApp.jitterMs | quote }}
+              value: {{ $.Values.sampleApp.jitterMs | quote }}
             - name: REGRESSED
-              value: {{ .Values.sampleApp.regressed | quote }}
+              value: {{ $.Values.sampleApp.regressed | quote }}
             - name: REGRESSION_ADD_MS
-              value: {{ .Values.sampleApp.regressionAddMs | quote }}
+              value: {{ $.Values.sampleApp.regressionAddMs | quote }}
+{{- end }}
 {{- end }}

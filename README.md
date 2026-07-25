@@ -132,5 +132,8 @@ docs/             design-doc.md, plan.md, todo.md
 ## Configuration
 
 Defaults live in [`deploy/helm/wardn/values.yaml`](deploy/helm/wardn/values.yaml)
-(Helm) and `docker-compose.yml` (Compose). The seeded app is `checkout-service`
-with key `wardn_dev_key_checkout` — fine for local dev, swap before anything real.
+(Helm) and `docker-compose.yml` (Compose). Two services are seeded out of the box —
+`checkout-service` and `payments-service` — each with its own API key and a live
+emitter, so the dashboard's app selector has something to switch between. Add or
+change them via `SEED_APPS` (`"name:key,name:key"`) + a matching sample-app; keys are
+dev-only, swap before anything real.

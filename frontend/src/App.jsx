@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import StatTile from './components/StatTile.jsx'
 import VersionChart from './components/VersionChart.jsx'
-import LatencyChart from './components/LatencyChart.jsx'
 import Login from './components/Login.jsx'
-import { fetchApps, fetchVersions, fetchVersionSeries, me, logout } from './api.js'
+import { fetchApps, fetchVersions, me, logout } from './api.js'
 
 const POLL_MS = 5000
 
@@ -31,7 +30,6 @@ export default function App() {
   const [app, setApp] = useState('')
   const [versions, setVersions] = useState([])
   const [selected, setSelected] = useState('')
-  const [detail, setDetail] = useState([])
   const [range, setRange] = useState('1d')
   const [error, setError] = useState('')
 
@@ -95,30 +93,9 @@ export default function App() {
     }
   }, [user, app, range])
 
-  // Poll raw samples for the selected version, within the time range.
-  useEffect(() => {
-    if (!user || !app || !selected) return
-    let alive = true
-    const load = async () => {
-      try {
-        const pts = await fetchVersionSeries(app, selected, range)
-        if (alive) setDetail(pts)
-      } catch (e) {
-        if (alive) onAuthError(e)
-      }
-    }
-    load()
-    const id = setInterval(load, POLL_MS)
-    return () => {
-      alive = false
-      clearInterval(id)
-    }
-  }, [user, app, selected, range])
-
   const selIdx = useMemo(() => versions.findIndex((v) => v.version === selected), [versions, selected])
   const selVer = selIdx >= 0 ? versions[selIdx] : null
   const prevVer = selIdx > 0 ? versions[selIdx - 1] : null
-  const rawStats = useMemo(() => computeStats(detail), [detail])
 
   async function handleLogout() {
     await logout()
@@ -128,7 +105,6 @@ export default function App() {
     setVersions([])
     setSelected('')
     selectedRef.current = ''
-    setDetail([])
     setError('')
   }
 
@@ -157,7 +133,7 @@ export default function App() {
           <div className="header-main">
             <div className="header-title">
               <h1>Latency by version</h1>
-              <span className="header-sub">p99 across every deploy{app ? ` · ${app}` : ''}</span>
+              <span className="header-sub">latency percentiles across every deploy{app ? ` · ${app}` : ''}</span>
             </div>
             <div className="header-controls">
               <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
@@ -187,6 +163,7 @@ export default function App() {
           <div className="content-inner fade-in">
             <div className="section-label">
               SELECTED VERSION · <span style={{ color: 'var(--accent)' }}>{selected || '—'}</span>
+              <span className="section-hint">click a point on any chart to inspect a version</span>
             </div>
             <div className="tiles">
               {pctTiles.map(([label, cur, prev]) => {
@@ -224,30 +201,36 @@ export default function App() {
                 </span>
               </div>
               <div className="panel-body">
-                <VersionChart versions={versions} selected={selected} onSelect={setSelected} />
+                <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p99" />
               </div>
             </div>
 
-            <div className="panel">
-              <div className="panel-head">
-                <span className="panel-title">
-                  Selected · <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{selected || '—'}</span> · latency over time
-                </span>
-                <span className="legend">
-                  <span className="swatch" />
-                  latency_ms
-                </span>
+            <div className="chart-row">
+              <div className="panel">
+                <div className="panel-head">
+                  <span className="panel-title">Latency by version · p95</span>
+                  <span className="legend">
+                    <span className="swatch" />
+                    p95 per version
+                  </span>
+                </div>
+                <div className="panel-body">
+                  <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p95" />
+                </div>
               </div>
-              <div className="panel-body">
-                <LatencyChart points={detail} />
-              </div>
-            </div>
 
-            <div className="tiles">
-              <StatTile label="LATEST" value={rawStats.latest} sub={selected || '—'} />
-              <StatTile label="AVERAGE" value={rawStats.avg} sub="mean of samples" />
-              <StatTile label="PEAK" value={rawStats.max} sub="max sample" />
-              <StatTile label="SAMPLES" value={rawStats.count} sub="data points" />
+              <div className="panel">
+                <div className="panel-head">
+                  <span className="panel-title">Latency by version · p90</span>
+                  <span className="legend">
+                    <span className="swatch" />
+                    p90 per version
+                  </span>
+                </div>
+                <div className="panel-body">
+                  <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p90" />
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -260,20 +243,4 @@ export default function App() {
       </div>
     </div>
   )
-}
-
-function computeStats(points) {
-  if (!points || points.length === 0) {
-    return { latest: '—', avg: '—', max: '—', count: '0' }
-  }
-  const values = points.map((p) => p.value)
-  const latest = values[values.length - 1]
-  const avg = values.reduce((a, b) => a + b, 0) / values.length
-  const max = Math.max(...values)
-  return {
-    latest: `${latest.toFixed(1)}ms`,
-    avg: `${avg.toFixed(1)}ms`,
-    max: `${max.toFixed(1)}ms`,
-    count: String(points.length),
-  }
 }
