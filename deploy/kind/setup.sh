@@ -20,7 +20,7 @@ fi
 echo "==> Building images"
 docker build -t "$BACKEND_IMG"  "$REPO_ROOT"
 docker build -t "$FRONTEND_IMG" "$REPO_ROOT/frontend"
-docker build -t "$SAMPLE_IMG"   "$REPO_ROOT/sample-app"
+docker build -t "$SAMPLE_IMG"   "$REPO_ROOT/demo/sample-app"
 
 echo "==> Loading images into kind"
 kind load docker-image --name "$CLUSTER" "$BACKEND_IMG" "$FRONTEND_IMG" "$SAMPLE_IMG"

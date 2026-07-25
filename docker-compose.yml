@@ -41,7 +41,7 @@ services:
       - wardn-backend
 
   wardn-sample-app:
-    build: ./sample-app
+    build: ./demo/sample-app
     environment:
       WARDN_URL: http://wardn-backend:8080
       WARDN_API_KEY: wardn_dev_key_checkout

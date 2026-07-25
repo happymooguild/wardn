@@ -103,11 +103,13 @@ auth/RBAC stage. Ingest is always key-gated and scoped to the key's app.
 
 ```
 main.go           Go backend entrypoint (the backend is the repo root)
-config/ store/    backend packages: config, storage,
-api/ seed/            HTTP API, demo-data seeder
+config/ store/    backend packages: config + Postgres storage
+api/              backend package: HTTP API
 Dockerfile        backend image (build context = repo root)
 frontend/         React + Vite dashboard (components/, styles.css) + nginx
-sample-app/       Go metric emitter (its own module)
+demo/             demo scaffolding (fake data for the skeleton)
+  seed/           historical backfill — run in-process by the backend
+  sample-app/     live metric emitter (its own module)
 deploy/
   helm/wardn/     Helm chart: backend, frontend, postgres, sample-app
   kind/           kind config + setup.sh / regress.sh / teardown.sh

@@ -13,7 +13,7 @@ import (
 
 	"wardn/api"
 	"wardn/config"
-	"wardn/seed"
+	"wardn/demo/seed"
 	"wardn/store"
 )
 
