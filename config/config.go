@@ -12,6 +12,10 @@ type Config struct {
 	SeedAPIKey  string // plaintext API key seeded for SeedApp; stored hashed
 	SeedDemo    bool   // seed synthetic multi-version history on first boot
 	SeedMetric  string // metric name to seed history for
+
+	SessionSecret string // signs the login session cookie
+	SeedAdminUser string // seeded dashboard admin username
+	SeedAdminPass string // seeded dashboard admin password (stored bcrypt-hashed)
 }
 
 func Load() Config {
@@ -22,6 +26,10 @@ func Load() Config {
 		SeedAPIKey:  env("SEED_API_KEY", "wardn_dev_key_checkout"),
 		SeedDemo:    envBool("SEED_DEMO", true),
 		SeedMetric:  env("SEED_METRIC", "latency_ms"),
+
+		SessionSecret: env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
+		SeedAdminUser: env("SEED_ADMIN_USER", "admin"),
+		SeedAdminPass: env("SEED_ADMIN_PASS", "admin@12345"),
 	}
 }
 

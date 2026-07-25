@@ -3,11 +3,15 @@ import Sidebar from './components/Sidebar.jsx'
 import StatTile from './components/StatTile.jsx'
 import VersionChart from './components/VersionChart.jsx'
 import LatencyChart from './components/LatencyChart.jsx'
-import { fetchApps, fetchVersions, fetchVersionSeries } from './api.js'
+import Login from './components/Login.jsx'
+import { fetchApps, fetchVersions, fetchVersionSeries, me, logout } from './api.js'
 
 const POLL_MS = 5000
 
 export default function App() {
+  const [user, setUser] = useState(null)
+  const [checking, setChecking] = useState(true)
+
   const [apps, setApps] = useState([])
   const [app, setApp] = useState('')
   const [versions, setVersions] = useState([])
@@ -15,26 +19,39 @@ export default function App() {
   const [detail, setDetail] = useState([])
   const [error, setError] = useState('')
 
-  // Mirror `selected` in a ref so the versions poll can default it to the latest
-  // version without re-subscribing every time the selection changes.
   const selectedRef = useRef('')
   useEffect(() => {
     selectedRef.current = selected
   }, [selected])
 
-  // Load apps once.
+  // On mount, ask the backend who we are. 401 -> show the login screen.
   useEffect(() => {
+    me()
+      .then((u) => setUser(u))
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false))
+  }, [])
+
+  // A 401 from any data call means the session lapsed — bounce to login.
+  const onAuthError = (e) => {
+    if (String(e).includes('401')) setUser(null)
+    else setError(String(e))
+  }
+
+  // Load apps once signed in.
+  useEffect(() => {
+    if (!user) return
     fetchApps()
       .then((list) => {
         setApps(list)
         if (list.length) setApp(list[0].name)
       })
-      .catch((e) => setError(String(e)))
-  }, [])
+      .catch(onAuthError)
+  }, [user])
 
-  // Poll the per-version stats for the selected app.
+  // Poll per-version stats for the selected app.
   useEffect(() => {
-    if (!app) return
+    if (!user || !app) return
     let alive = true
     const load = async () => {
       try {
@@ -44,7 +61,7 @@ export default function App() {
         setError('')
         if (!selectedRef.current && vs.length) setSelected(vs[vs.length - 1].version)
       } catch (e) {
-        if (alive) setError(String(e))
+        if (alive) onAuthError(e)
       }
     }
     load()
@@ -53,18 +70,18 @@ export default function App() {
       alive = false
       clearInterval(id)
     }
-  }, [app])
+  }, [user, app])
 
-  // Poll the raw samples for the selected version (drill-down).
+  // Poll raw samples for the selected version.
   useEffect(() => {
-    if (!app || !selected) return
+    if (!user || !app || !selected) return
     let alive = true
     const load = async () => {
       try {
         const pts = await fetchVersionSeries(app, selected)
         if (alive) setDetail(pts)
       } catch (e) {
-        if (alive) setError(String(e))
+        if (alive) onAuthError(e)
       }
     }
     load()
@@ -73,12 +90,28 @@ export default function App() {
       alive = false
       clearInterval(id)
     }
-  }, [app, selected])
+  }, [user, app, selected])
 
   const selIdx = useMemo(() => versions.findIndex((v) => v.version === selected), [versions, selected])
   const selVer = selIdx >= 0 ? versions[selIdx] : null
   const prevVer = selIdx > 0 ? versions[selIdx - 1] : null
   const rawStats = useMemo(() => computeStats(detail), [detail])
+
+  async function handleLogout() {
+    await logout()
+    setUser(null)
+    setApps([])
+    setApp('')
+    setVersions([])
+    setSelected('')
+    selectedRef.current = ''
+    setDetail([])
+    setError('')
+  }
+
+  // --- gate ---
+  if (checking) return <div className="login-wrap" />
+  if (!user) return <Login onSuccess={setUser} />
 
   const pctTiles = [
     ['P50', selVer?.p50, prevVer?.p50],
@@ -89,7 +122,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar />
+      <Sidebar user={user} onLogout={handleLogout} />
 
       <div className="main">
         <header className="header">

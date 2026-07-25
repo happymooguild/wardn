@@ -1,56 +1,167 @@
-// Package api is the HTTP surface of the backend.
+// Package api is the HTTP surface of the backend, built on Gin.
 //
-// Endpoints (skeleton):
+// Endpoints:
 //
 //	GET  /healthz                          liveness
-//	POST /api/v1/metrics                   ingest one sample      (API-key auth, scoped to app)
-//	GET  /api/v1/versions?app=&metric=     per-version percentiles (open; the version chart)
-//	GET  /api/v1/metrics?app=&version=     raw samples for a version (open; the drill-down)
-//	GET  /api/v1/apps                      list registered apps    (open)
+//	POST /api/v1/auth/login                username/password -> session cookie
+//	POST /api/v1/auth/logout               clear the session
+//	GET  /api/v1/auth/me                   current user (401 if not signed in)
+//	POST /api/v1/metrics                   ingest a sample   (API-key auth, scoped to app)
+//	GET  /api/v1/versions?app=&metric=     per-version percentiles   (requires login)
+//	GET  /api/v1/metrics?app=&version=     raw samples for a version (requires login)
+//	GET  /api/v1/apps                      list registered apps      (requires login)
 //
-// Read endpoints are open on purpose for now — the dashboard is an unauthenticated
-// browser app until the auth/RBAC stage lands. Ingest is always key-gated.
+// Two auth models sit side by side: dashboard reads are gated by a login session
+// (a human in a browser), while ingest is gated by a per-app API key (a service).
 package api
 
 import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
+	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+
 	"wardn/store"
 )
 
+const sessionName = "wardn_session"
+
 type API struct{ st *store.Store }
 
-// New returns the fully-wired HTTP handler (routes + CORS).
-func New(st *store.Store) http.Handler {
+// New wires the router. sessionSecret signs the login cookie.
+func New(st *store.Store, sessionSecret string) http.Handler {
+	gin.SetMode(gin.ReleaseMode)
 	a := &API{st: st}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", a.health)
-	mux.HandleFunc("POST /api/v1/metrics", a.ingest)
-	mux.HandleFunc("GET /api/v1/versions", a.versions)
-	mux.HandleFunc("GET /api/v1/metrics", a.series)
-	mux.HandleFunc("GET /api/v1/apps", a.apps)
-	return cors(mux)
+
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
+
+	cookieStore := cookie.NewStore([]byte(sessionSecret))
+	cookieStore.Options(sessions.Options{
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   8 * 60 * 60, // 8h
+		SameSite: http.SameSiteLaxMode,
+		// Secure: true — enable once the dashboard is served over HTTPS.
+	})
+	r.Use(sessions.Sessions(sessionName, cookieStore))
+
+	r.GET("/healthz", a.health)
+
+	v1 := r.Group("/api/v1")
+	{
+		v1.POST("/auth/login", a.login)
+		v1.POST("/auth/logout", a.logout)
+		v1.GET("/auth/me", a.me)
+
+		// Service-to-service ingest: API-key auth, not a session.
+		v1.POST("/metrics", a.ingest)
+
+		// Dashboard reads: require a signed-in user.
+		authed := v1.Group("")
+		authed.Use(a.requireAuth)
+		{
+			authed.GET("/versions", a.versions)
+			authed.GET("/metrics", a.series)
+			authed.GET("/apps", a.apps)
+		}
+	}
+	return r
 }
 
 // HashKey is the one-way transform applied to API keys before they touch the DB.
-// SHA-256 is fine here: API keys are long and random, so we don't need a slow
-// password hash.
+// SHA-256 is fine: API keys are long and random, so no slow password hash needed.
 func HashKey(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:])
 }
 
-func (a *API) health(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+// HashPassword bcrypt-hashes a user password (used by the admin seeder).
+func HashPassword(pw string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	return string(b), err
 }
+
+func checkPassword(hash, pw string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
+}
+
+// ---- auth handlers ----
+
+type loginReq struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (a *API) login(c *gin.Context) {
+	var req loginReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body"})
+		return
+	}
+
+	u, err := a.st.UserByUsername(c, req.Username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			return
+		}
+		log.Printf("login: lookup user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	if !checkPassword(u.PasswordHash, req.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		return
+	}
+
+	sess := sessions.Default(c)
+	sess.Set("username", u.Username)
+	sess.Set("role", u.Role)
+	if err := sess.Save(); err != nil {
+		log.Printf("login: save session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not start session"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user": gin.H{"username": u.Username, "role": u.Role}})
+}
+
+func (a *API) logout(c *gin.Context) {
+	sess := sessions.Default(c)
+	sess.Clear()
+	_ = sess.Save()
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (a *API) me(c *gin.Context) {
+	sess := sessions.Default(c)
+	username := sess.Get("username")
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"user": gin.H{"username": username, "role": sess.Get("role")}})
+}
+
+func (a *API) requireAuth(c *gin.Context) {
+	sess := sessions.Default(c)
+	if sess.Get("username") == nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+	c.Next()
+}
+
+// ---- ingest (API-key) ----
 
 type ingestReq struct {
 	App       string  `json:"app"`
@@ -60,34 +171,33 @@ type ingestReq struct {
 	Timestamp string  `json:"timestamp"` // optional RFC3339; defaults to now
 }
 
-func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
-	key := bearer(r)
+func (a *API) ingest(c *gin.Context) {
+	key := bearer(c.GetHeader("Authorization"))
 	if key == "" {
-		writeErr(w, http.StatusUnauthorized, "missing bearer token")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 		return
 	}
 
-	app, err := a.st.AppByAPIKeyHash(r.Context(), HashKey(key))
+	app, err := a.st.AppByAPIKeyHash(c, HashKey(key))
 	if errors.Is(err, sql.ErrNoRows) {
-		writeErr(w, http.StatusUnauthorized, "invalid api key")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid api key"})
 		return
 	}
 	if err != nil {
 		log.Printf("ingest: lookup app: %v", err)
-		writeErr(w, http.StatusInternalServerError, "internal error")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
 	var req ingestReq
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid json body")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json body"})
 		return
 	}
 
-	// Key scoping: a key may only post for the app it belongs to. If the caller
-	// names an app, it must match; if it omits it, we use the key's app.
+	// Key scoping: a key may only post for the app it belongs to.
 	if req.App != "" && req.App != app.Name {
-		writeErr(w, http.StatusForbidden, "api key not valid for app "+req.App)
+		c.JSON(http.StatusForbidden, gin.H{"error": "api key not valid for app " + req.App})
 		return
 	}
 
@@ -104,88 +214,73 @@ func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
 	if req.Timestamp != "" {
 		parsed, err := time.Parse(time.RFC3339, req.Timestamp)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "timestamp must be RFC3339")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "timestamp must be RFC3339"})
 			return
 		}
 		ts = parsed
 	}
 
-	if err := a.st.InsertMetric(r.Context(), app.ID, metric, version, req.Value, ts); err != nil {
+	if err := a.st.InsertMetric(c, app.ID, metric, version, req.Value, ts); err != nil {
 		log.Printf("ingest: insert metric: %v", err)
-		writeErr(w, http.StatusInternalServerError, "could not store metric")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not store metric"})
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+	c.JSON(http.StatusAccepted, gin.H{"status": "accepted"})
 }
 
-// versions returns the per-version percentile profile that the version chart plots.
-func (a *API) versions(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	app := q.Get("app")
+// ---- dashboard reads ----
+
+func (a *API) versions(c *gin.Context) {
+	app := c.Query("app")
 	if app == "" {
-		writeErr(w, http.StatusBadRequest, "app query param is required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app query param is required"})
 		return
 	}
-	metric := q.Get("metric")
-	if metric == "" {
-		metric = "latency_ms"
-	}
+	metric := c.DefaultQuery("metric", "latency_ms")
 
-	stats, err := a.st.VersionsWithStats(r.Context(), app, metric)
+	stats, err := a.st.VersionsWithStats(c, app, metric)
 	if err != nil {
 		log.Printf("versions: %v", err)
-		writeErr(w, http.StatusInternalServerError, "could not read versions")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read versions"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"app":      app,
-		"metric":   metric,
-		"versions": stats,
-	})
+	c.JSON(http.StatusOK, gin.H{"app": app, "metric": metric, "versions": stats})
 }
 
-// series returns the raw samples for one version — the drill-down time-series.
-func (a *API) series(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	app := q.Get("app")
-	version := q.Get("version")
+func (a *API) series(c *gin.Context) {
+	app := c.Query("app")
+	version := c.Query("version")
 	if app == "" || version == "" {
-		writeErr(w, http.StatusBadRequest, "app and version query params are required")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "app and version query params are required"})
 		return
 	}
-	metric := q.Get("metric")
-	if metric == "" {
-		metric = "latency_ms"
-	}
+	metric := c.DefaultQuery("metric", "latency_ms")
 
-	points, err := a.st.VersionSeries(r.Context(), app, metric, version)
+	points, err := a.st.VersionSeries(c, app, metric, version)
 	if err != nil {
 		log.Printf("series: %v", err)
-		writeErr(w, http.StatusInternalServerError, "could not read series")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read series"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"app":     app,
-		"metric":  metric,
-		"version": version,
-		"points":  points,
-	})
+	c.JSON(http.StatusOK, gin.H{"app": app, "metric": metric, "version": version, "points": points})
 }
 
-func (a *API) apps(w http.ResponseWriter, r *http.Request) {
-	apps, err := a.st.ListApps(r.Context())
+func (a *API) apps(c *gin.Context) {
+	apps, err := a.st.ListApps(c)
 	if err != nil {
 		log.Printf("apps: %v", err)
-		writeErr(w, http.StatusInternalServerError, "could not list apps")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list apps"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"apps": apps})
+	c.JSON(http.StatusOK, gin.H{"apps": apps})
 }
 
-// ---- helpers ----
+func (a *API) health(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
 
-func bearer(r *http.Request) string {
-	h := r.Header.Get("Authorization")
+// bearer extracts the token from an "Authorization: Bearer <token>" header.
+func bearer(h string) string {
 	if h == "" {
 		return ""
 	}
@@ -194,30 +289,4 @@ func bearer(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimSpace(parts[1])
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeErr(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-// cors allows the Vite dev server (localhost:5173) to call the API directly.
-// In the Helm deployment the frontend proxies /api same-origin, so this is a
-// dev convenience, not a production posture.
-func cors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }

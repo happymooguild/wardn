@@ -46,9 +46,19 @@ func main() {
 		}
 	}
 
+	// Seed the admin login so the dashboard is reachable during testing.
+	adminHash, err := api.HashPassword(cfg.SeedAdminPass)
+	if err != nil {
+		log.Fatalf("hash admin password: %v", err)
+	}
+	if err := st.SeedUser(ctx, cfg.SeedAdminUser, adminHash, "admin"); err != nil {
+		log.Fatalf("seed admin user: %v", err)
+	}
+	log.Printf("seeded admin user %q", cfg.SeedAdminUser)
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.New(st),
+		Handler:           api.New(st, cfg.SessionSecret),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

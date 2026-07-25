@@ -28,15 +28,21 @@ full design and [`docs/plan.md`](docs/plan.md) for the staged build plan.
 - **sample-app** — stands in for a real service. Every few seconds it POSTs a
   synthetic `latency_ms` sample tagged with its `APP_VERSION`, authenticated with an
   API key from a mounted Secret. Set `REGRESSED=true` to simulate a bad deploy.
-- **backend** (Go, at the repo root) — ingests metrics (API-key auth, scoped per app),
-  stores them per-version in Postgres, and serves them back. Computes p50/p90/p95/p99
-  **per version**. Seeds an app + key, and synthetic multi-version history, on first boot.
-- **Postgres** — the only datastore. Holds `apps` and `metrics` (each sample carries a
-  `version`).
-- **frontend** (React + Vite) — the dashboard, styled from the *Wardn Dashboards*
-  design: a **version-comparison chart** (one clickable point per version, regressions
-  in red), percentile tiles, and a per-version latency drill-down. nginx serves it and
-  proxies `/api`.
+- **backend** (Go + **Gin**, at the repo root) — ingests metrics (API-key auth, scoped
+  per app), stores them per-version in Postgres, serves them back, and computes
+  p50/p90/p95/p99 **per version**. Handles **login** (username/password → cookie session,
+  bcrypt-hashed). Seeds an app + key, an admin user, and synthetic multi-version history
+  on first boot.
+- **Postgres** — the only datastore. Holds `apps`, `users`, and `metrics` (each sample
+  carries a `version`).
+- **frontend** (React + Vite) — a **login screen**, then the dashboard, styled from the
+  *Wardn Dashboards* design: a **version-comparison chart** (one clickable point per
+  version, regressions in red), percentile tiles, and a per-version latency drill-down.
+  nginx serves it and proxies `/api`.
+
+**Login:** the dashboard requires a sign-in. A dev admin is seeded on first boot —
+**`admin` / `admin@12345`** (override with `SEED_ADMIN_USER` / `SEED_ADMIN_PASS`). Later,
+the real Helm chart will set the initial admin by exec-ing into the pod.
 
 > This is deliberately the smallest thing that works. SigNoz, the analyzer, the AI
 > layer, auth/RBAC, alerting — all come in the later stages in `docs/plan.md`.
@@ -89,10 +95,16 @@ whole product is built around.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `GET`  | `/healthz` | — | liveness |
+| `POST` | `/api/v1/auth/login` | — | `{username, password}` → sets session cookie |
+| `POST` | `/api/v1/auth/logout` | session | clear the session |
+| `GET`  | `/api/v1/auth/me` | session | current user (401 if not signed in) |
 | `POST` | `/api/v1/metrics` | `Bearer <api-key>` | ingest one sample `{app, metric, version, value, timestamp?}` |
-| `GET`  | `/api/v1/versions?app=&metric=` | — | per-version percentiles (p50/p90/p95/p99) — the version chart |
-| `GET`  | `/api/v1/metrics?app=&version=&metric=` | — | raw samples for one version — the drill-down |
-| `GET`  | `/api/v1/apps` | — | list registered apps |
+| `GET`  | `/api/v1/versions?app=&metric=` | session | per-version percentiles (p50/p90/p95/p99) — the version chart |
+| `GET`  | `/api/v1/metrics?app=&version=&metric=` | session | raw samples for one version — the drill-down |
+| `GET`  | `/api/v1/apps` | session | list registered apps |
+
+Two auth models: dashboard reads need a **login session** (a human in a browser); ingest
+needs a **per-app API key** (a service). Ingest stays key-gated regardless of login.
 
 Read endpoints are open for now — the dashboard is unauthenticated until the
 auth/RBAC stage. Ingest is always key-gated and scoped to the key's app.

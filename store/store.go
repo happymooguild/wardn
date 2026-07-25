@@ -22,6 +22,14 @@ type App struct {
 	Name string `json:"name"`
 }
 
+// User is a dashboard login. Role is 'admin' for now (RBAC comes in a later stage).
+type User struct {
+	ID           int64
+	Username     string
+	PasswordHash string
+	Role         string
+}
+
 // Point is one sample of a metric at a moment in time.
 type Point struct {
 	TS    time.Time `json:"ts"`
@@ -55,6 +63,14 @@ CREATE TABLE IF NOT EXISTS apps (
     name         TEXT UNIQUE NOT NULL,
     api_key_hash TEXT NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id            BIGSERIAL PRIMARY KEY,
+    username      TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'admin',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS metrics (
@@ -101,6 +117,25 @@ func (s *Store) SeedApp(ctx context.Context, name, apiKeyHash string) (int64, er
 		 RETURNING id`,
 		name, apiKeyHash).Scan(&id)
 	return id, err
+}
+
+// SeedUser inserts a user if one with that username doesn't already exist
+// (DO NOTHING keeps a later password change from being reset on every boot).
+func (s *Store) SeedUser(ctx context.Context, username, passwordHash, role string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)
+		 ON CONFLICT (username) DO NOTHING`,
+		username, passwordHash, role)
+	return err
+}
+
+// UserByUsername looks up a login. sql.ErrNoRows means no such user.
+func (s *Store) UserByUsername(ctx context.Context, username string) (User, error) {
+	var u User
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, username, password_hash, role FROM users WHERE username = $1`,
+		username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role)
+	return u, err
 }
 
 // AppByAPIKeyHash resolves the app an API key belongs to. sql.ErrNoRows means

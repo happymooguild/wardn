@@ -51,7 +51,10 @@ const ITEMS = [
   ['explore', 'Explore', false],
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ user, onLogout }) {
+  const name = user?.username ?? '—'
+  const role = user?.role ?? ''
+  const initials = name.slice(0, 2).toUpperCase()
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -76,11 +79,17 @@ export default function Sidebar() {
         Admin
       </button>
       <div className="user">
-        <div className="avatar">JD</div>
+        <div className="avatar">{initials}</div>
         <div className="who">
-          <span className="name">Jordan Dev</span>
-          <span className="role">admin</span>
+          <span className="name">{name}</span>
+          <span className="role">{role}</span>
         </div>
+        <button className="signout" type="button" onClick={onLogout} title="Sign out" aria-label="Sign out">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+            <path d="M8 4H5a1 1 0 00-1 1v10a1 1 0 001 1h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12 14l3-4-3-4M15 10H8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
     </aside>
   )
