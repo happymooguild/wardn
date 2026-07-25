@@ -52,6 +52,35 @@ export async function createApp(name) {
   return data
 }
 
+// ---- dashboards ----
+
+export async function fetchDashboards() {
+  const res = await fetch('/api/v1/dashboards', opts)
+  if (!res.ok) throw new Error(`dashboards: ${res.status}`)
+  const data = await res.json()
+  return data.dashboards ?? []
+}
+
+export async function createDashboard(body) {
+  const res = await fetch('/api/v1/dashboards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `create dashboard: ${res.status}`)
+  return data
+}
+
+export async function deleteDashboard(id) {
+  const res = await fetch(`/api/v1/dashboards/${id}`, { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `delete dashboard: ${res.status}`)
+  }
+}
+
 export async function fetchVersions(app, range = '1d', metric = 'latency_ms') {
   const params = new URLSearchParams({ app, metric, range })
   const res = await fetch(`/api/v1/versions?${params}`, opts)

@@ -18,6 +18,10 @@ type Series struct {
 
 type MetricsProvider interface {
 	Query(ctx context.Context, promql string, start, end time.Time) (Series, error)
+	// QuerySeries is Query with an explicit step (seconds) so callers that need
+	// fine-resolution samples (e.g. per-version percentile charts) can ask for
+	// them instead of the coarse auto-step Query picks.
+	QuerySeries(ctx context.Context, promql string, start, end time.Time, stepSec int) (Series, error)
 }
 
 // AverageScalar returns the mean of point values, or 0 if empty.

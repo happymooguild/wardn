@@ -22,7 +22,7 @@ data:
         body: |
           {
             "app": "{{.app.metadata.name}}",
-            "version": "{{.app.status.sync.revision}}",
+            "version": "{{ (index .app.metadata.annotations "wardn.dev/version") | default (.app.status.sync.revision | trunc 7) }}",
             "environment": "production",
             "timestamp": "{{.app.status.operationState.finishedAt}}",
             "source": "argocd"

@@ -35,6 +35,10 @@ spec:
                 secretKeyRef:
                   name: wardn-secrets
                   key: seed-apps
+            # Metrics now come from SigNoz (pulled around deploy markers), so the
+            # synthetic multi-version seed is off by default.
+            - name: SEED_DEMO
+              value: {{ .Values.backend.seedDemo | default false | quote }}
             - name: PUBLIC_BASE_URL
               value: {{ .Values.backend.publicBaseUrl | quote }}
             - name: ALLOW_LOCAL_WEBHOOKS

@@ -25,6 +25,9 @@ backend:
   image: wardn-backend:dev
   replicas: 1
   port: 8080
+  # Synthetic multi-version seed history. Off: the dashboard is fed by SigNoz
+  # snapshots taken around deploy markers, not fabricated data.
+  seedDemo: false
   publicBaseUrl: http://localhost:8088
   allowLocalWebhooks: true
   # Leave empty to skip SigNoz queries (marker + alert UI still work).

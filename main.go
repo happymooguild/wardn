@@ -121,6 +121,7 @@ func main() {
 			Alerts:        alertEngine,
 			AI:            aiResolver,
 			SecretBox:     box,
+			Metrics:       provider,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}

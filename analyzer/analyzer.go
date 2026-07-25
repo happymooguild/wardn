@@ -113,6 +113,46 @@ func (w *Worker) tick(ctx context.Context) {
 	_ = w.Store.CompleteJob(ctx, job.ID)
 }
 
+// afterSettle is skipped at the start of the after-window so a rolling deploy's
+// terminating old pod can't pollute the new version's samples.
+const afterSettle = 15 * time.Second
+
+// ingestVersionMetrics pulls raw samples for every dashboard's metric (built-in
+// and custom, read from the DB) over the service's after-window from SigNoz and
+// stores them keyed by this deploy's version, powering the per-version
+// dashboards. Best-effort: per-metric failures are logged and skipped, never
+// fatal, so they don't undo an already-written verdict.
+func (w *Worker) ingestVersionMetrics(ctx context.Context, app store.App, deploy store.DeployEvent, start, end time.Time) {
+	metrics, err := w.Store.DashboardMetrics(ctx)
+	if err != nil {
+		log.Printf("analyzer: deploy %d dashboard metrics: %v", deploy.ID, err)
+		return
+	}
+	for _, m := range metrics {
+		// Filter by the deploy's exact version so we pull only this version's
+		// samples — never a prior version's stale series carried forward by the
+		// query engine into our window. (Marker version == emitted service version.)
+		promql := fmt.Sprintf(`%s{service_name=%q,version=%q}`, m.SignozMetric, app.SignozServiceName, deploy.Version)
+		series, err := w.Metrics.QuerySeries(ctx, promql, start, end, 5) // ~native scrape resolution
+		if err != nil {
+			log.Printf("analyzer: deploy %d %s pull: %v", deploy.ID, m.MetricKey, err)
+			continue
+		}
+		if len(series.Points) == 0 {
+			continue
+		}
+		samples := make([]store.Sample, 0, len(series.Points))
+		for _, p := range series.Points {
+			samples = append(samples, store.Sample{Version: deploy.Version, Value: p.V, TS: p.T})
+		}
+		if err := w.Store.InsertSamples(ctx, app.ID, m.MetricKey, samples); err != nil {
+			log.Printf("analyzer: deploy %d %s store: %v", deploy.ID, m.MetricKey, err)
+			continue
+		}
+		log.Printf("analyzer: deploy %d stored %d %s samples for version %s", deploy.ID, len(samples), m.MetricKey, deploy.Version)
+	}
+}
+
 func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy store.DeployEvent, app store.App) error {
 	if w.Metrics == nil {
 		return fmt.Errorf("metrics provider not configured (set SIGNOZ_URL and SIGNOZ_API_KEY)")
@@ -123,7 +163,11 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 		window = 2 * time.Minute
 	}
 	T := deploy.DeployedAt.UTC()
-	afterEnd := T.Add(window)
+	// Skip the first `afterSettle` seconds after the marker: during a rolling
+	// deploy the terminating old pod keeps emitting briefly, and those samples
+	// would pollute the new version's window. Start measuring once it's settled.
+	afterStart := T.Add(afterSettle)
+	afterEnd := afterStart.Add(window)
 	now := time.Now().UTC()
 	if now.Before(afterEnd) {
 		log.Printf("analyzer: deploy %d waiting until after-window ends (%s)", deploy.ID, afterEnd.Format(time.RFC3339))
@@ -143,7 +187,6 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 
 	beforeStart := T.Add(-window)
 	beforeEnd := T
-	afterStart := T
 
 	anyDegraded := false
 	anyData := false
@@ -204,8 +247,10 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 			degraded := false
 			if def.HigherIsWorse {
 				if def.Key == "error_rate" {
-					degraded = (*afterVal-*beforeVal) >= app.ErrorRateThresholdPP ||
-						(*beforeVal > 0 && deltaPct >= app.LatencyThresholdPct)
+					// Absolute percentage-point rise only. A relative % change on a
+					// sub-1% baseline is noise (0.9%→1.2% is +40% but meaningless),
+					// so error_rate must clear the pp threshold, not the latency %.
+					degraded = (*afterVal - *beforeVal) >= app.ErrorRateThresholdPP
 				} else {
 					degraded = deltaPct >= app.LatencyThresholdPct
 				}
@@ -221,6 +266,13 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 		}
 		snapshots = append(snapshots, sn)
 	}
+
+	// Feed the per-version dashboards (latency, error rate, throughput) straight
+	// from SigNoz: pull each metric's raw samples for the after-window and store
+	// them keyed by the deploy's version. Postgres then computes the per-version
+	// stats. This replaces the old continuous sample-app push — wardn only reads
+	// SigNoz, and only around markers.
+	w.ingestVersionMetrics(ctx, app, deploy, afterStart, afterEnd)
 
 	status := "healthy"
 	var reason *string

@@ -53,12 +53,14 @@ func (s *Store) CreateDeploy(ctx context.Context, app App, version, environment,
 		return CreateDeployResult{}, err
 	}
 
+	// Always schedule analysis, even for the first recorded deploy: the analyzer
+	// feeds the per-version Latency dashboard (after-window pull) and its
+	// before-window is time-based, so it works without a recorded predecessor.
+	// With no prior data the verdict simply resolves to inconclusive/healthy.
 	status := "pending_analysis"
 	var previousVersion *string
 	if prev.Valid {
 		previousVersion = &prev.String
-	} else {
-		status = "inconclusive"
 	}
 
 	var ev DeployEvent

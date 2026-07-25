@@ -36,26 +36,28 @@ func main() {
 		interval   = envDuration("INTERVAL", 5*time.Second)
 		baseMS     = envFloat("BASE_LATENCY_MS", 60)
 		jitterMS   = envFloat("JITTER_MS", 12)
+		baseRPS    = envFloat("BASE_RPS", 120)
 		regressed  = envBool("REGRESSED", false)
 		regressAdd = envFloat("REGRESSION_ADD_MS", 140)
 		otlp       = strings.TrimRight(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), "/")
+		// wardn now sources metrics from SigNoz around deploy markers, not from a
+		// continuous push. The legacy /api/v1/metrics push is off by default and
+		// only kept behind this flag for the older non-OTLP demo path.
+		pushWardn = envBool("WARDN_PUSH_METRICS", false)
 	)
 	if base == "" {
 		base = "http://localhost:8080"
 	}
-	if apiKey == "" {
-		log.Fatal("WARDN_API_KEY is required")
+	if pushWardn && apiKey == "" {
+		log.Fatal("WARDN_API_KEY is required when WARDN_PUSH_METRICS=true")
 	}
 
 	mode := "healthy"
 	if regressed {
 		mode = "regressed"
 	}
-	log.Printf("sample-app: posting %s for %q %s to wardn=%s every %s [%s]",
-		metric, appName, appVer, base, interval, mode)
-	if otlp != "" {
-		log.Printf("sample-app: also exporting OTLP metrics to %s", otlp)
-	}
+	log.Printf("sample-app: %q %s [%s] every %s (push=%v otlp=%q)",
+		appName, appVer, mode, interval, pushWardn, otlp)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	ticker := time.NewTicker(interval)
@@ -73,16 +75,24 @@ func main() {
 		if regressed {
 			errorRate = 8 + rand.Float64()*4
 		}
+		// Throughput (req/s), with a little jitter. A regressed build sheds load,
+		// so it also dips — giving the throughput dashboard a visible signal.
+		rps := baseRPS * (0.95 + rand.Float64()*0.1)
+		if regressed {
+			rps *= 0.7
+		}
 
-		postWardn(client, base, apiKey, sample{
-			App:       appName,
-			Metric:    metric,
-			Version:   appVer,
-			Value:     round1(value),
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-		})
+		if pushWardn {
+			postWardn(client, base, apiKey, sample{
+				App:       appName,
+				Metric:    metric,
+				Version:   appVer,
+				Value:     round1(value),
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+			})
+		}
 		if otlp != "" {
-			postOTLP(client, otlp, appName, appVer, value, errorRate)
+			postOTLP(client, otlp, appName, appVer, value, errorRate, rps)
 		}
 	}
 }
@@ -111,7 +121,7 @@ func postWardn(client *http.Client, base, apiKey string, s sample) {
 }
 
 // postOTLP sends OTLP/HTTP JSON gauges that SigNoz can scrape via PromQL.
-func postOTLP(client *http.Client, endpoint, service, version string, latencyMS, errorRate float64) {
+func postOTLP(client *http.Client, endpoint, service, version string, latencyMS, errorRate, rps float64) {
 	nowNano := time.Now().UnixNano()
 	payload := map[string]any{
 		"resourceMetrics": []any{
@@ -126,8 +136,9 @@ func postOTLP(client *http.Client, endpoint, service, version string, latencyMS,
 					map[string]any{
 						"scope": map[string]any{"name": "wardn-sample-app"},
 						"metrics": []any{
-							gaugeMetric("wardn_demo_latency_ms", "ms", latencyMS, nowNano, service),
-							gaugeMetric("wardn_demo_error_rate", "1", errorRate, nowNano, service),
+							gaugeMetric("wardn_demo_latency_ms", "ms", latencyMS, nowNano, service, version),
+							gaugeMetric("wardn_demo_error_rate", "1", errorRate, nowNano, service, version),
+							gaugeMetric("wardn_demo_rps", "1", rps, nowNano, service, version),
 						},
 					},
 				},
@@ -155,17 +166,21 @@ func postOTLP(client *http.Client, endpoint, service, version string, latencyMS,
 	}
 }
 
-func gaugeMetric(name, unit string, value float64, ts int64, service string) map[string]any {
+func gaugeMetric(name, unit string, value float64, ts int64, service, version string) map[string]any {
 	return map[string]any{
 		"name": name,
 		"unit": unit,
 		"gauge": map[string]any{
 			"dataPoints": []any{
 				map[string]any{
-					"asDouble":        value,
-					"timeUnixNano":    fmt.Sprintf("%d", ts),
+					"asDouble":     value,
+					"timeUnixNano": fmt.Sprintf("%d", ts),
+					// version as a datapoint attribute makes it a PromQL-filterable
+					// label, so wardn can pull exactly one deploy's samples and never
+					// mix in a prior version's stale (carried-forward) series.
 					"attributes": []any{
 						kv("service_name", service),
+						kv("version", version),
 					},
 				},
 			},

@@ -29,9 +29,13 @@ awk -v ver="$VER" -v reg="$REGRESS" '
   { print }
 ' deployment.yaml > deployment.yaml.tmp && mv deployment.yaml.tmp deployment.yaml
 
-git -c user.email=wardn@example.com -c user.name=wardn commit -aqm "deploy $VER (regressed=$REGRESS)"
+git -c user.email=wardn@example.com -c user.name=wardn -c commit.gpgsign=false commit -aqm "deploy $VER (regressed=$REGRESS)"
 git push -q origin main
 
+# Surface the semantic version to the deploy marker: ArgoCD's notification reads
+# this annotation (falling back to the short git SHA if it's ever missing), so
+# the marker carries "v1.0.N" instead of a commit hash.
+kubectl -n argocd annotate app storefront wardn.dev/version="$VER" --overwrite >/dev/null 2>&1 || true
 # Nudge ArgoCD to refresh now instead of waiting for its poll interval.
 kubectl -n argocd annotate app storefront argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1 || true
 

@@ -22,6 +22,7 @@ import (
 
 	"wardn/ai"
 	"wardn/alert"
+	"wardn/metrics"
 	"wardn/secret"
 	"wardn/store"
 )
@@ -33,7 +34,8 @@ type API struct {
 	alerts       *alert.Engine
 	clockSkewMax time.Duration
 	ai           *ai.Resolver
-	box          *secret.Box // nil when WARDN_SECRET_KEY is unset
+	box          *secret.Box              // nil when WARDN_SECRET_KEY is unset
+	metrics      metrics.MetricsProvider // nil when SigNoz isn't configured
 }
 
 type Options struct {
@@ -42,6 +44,7 @@ type Options struct {
 	Alerts        *alert.Engine
 	AI            *ai.Resolver
 	SecretBox     *secret.Box
+	Metrics       metrics.MetricsProvider
 }
 
 // New wires the router.
@@ -56,6 +59,7 @@ func New(st *store.Store, opts Options) http.Handler {
 		clockSkewMax: opts.ClockSkewMax,
 		ai:           opts.AI,
 		box:          opts.SecretBox,
+		metrics:      opts.Metrics,
 	}
 
 	r := gin.New()
@@ -86,6 +90,9 @@ func New(st *store.Store, opts Options) http.Handler {
 		{
 			authed.GET("/versions", a.versions)
 			authed.GET("/metrics", a.series)
+			authed.GET("/dashboards", a.listDashboards)
+			authed.POST("/dashboards", a.createDashboard)
+			authed.DELETE("/dashboards/:id", a.deleteDashboard)
 			authed.GET("/apps", a.apps)
 			authed.POST("/apps", a.createApp)
 			authed.GET("/metric-definitions", a.listMetricDefinitions)

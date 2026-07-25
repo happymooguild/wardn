@@ -404,6 +404,26 @@ VALUES
 ON CONFLICT (key) DO UPDATE SET
   promql_template = EXCLUDED.promql_template,
   description = EXCLUDED.description;
+
+-- Per-version dashboards. Each maps a display to a SigNoz metric wardn pulls per
+-- version around every deploy marker. Built-ins are seeded; users add custom rows.
+CREATE TABLE IF NOT EXISTS dashboards (
+    id            BIGSERIAL PRIMARY KEY,
+    name          TEXT NOT NULL,
+    metric_key    TEXT UNIQUE NOT NULL,   -- storage key (what the version charts query)
+    signoz_metric TEXT NOT NULL,          -- the metric pulled from SigNoz
+    kind          TEXT NOT NULL DEFAULT 'single',  -- 'single' | 'percentiles'
+    unit          TEXT NOT NULL DEFAULT '',
+    decimals      INT  NOT NULL DEFAULT 0,
+    builtin       BOOLEAN NOT NULL DEFAULT false,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO dashboards (name, metric_key, signoz_metric, kind, unit, decimals, builtin) VALUES
+  ('Latency',    'latency_ms',  'wardn_demo_latency_ms', 'percentiles', 'ms',      0, true),
+  ('Error rate', 'error_rate',  'wardn_demo_error_rate', 'single',      '%',       2, true),
+  ('Throughput', 'throughput',  'wardn_demo_rps',        'single',      ' req/s',  0, true)
+ON CONFLICT (metric_key) DO NOTHING;
 `
 
 func Open(url string) (*Store, error) {

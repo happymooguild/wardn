@@ -51,15 +51,24 @@ type promqSpec struct {
 }
 
 func (p *SignozProvider) Query(ctx context.Context, promql string, start, end time.Time) (Series, error) {
+	if !end.After(start) {
+		return Series{}, fmt.Errorf("signoz: end must be after start")
+	}
+	windowSec := end.Sub(start).Seconds()
+	step := int(math.Max(15, math.Ceil(windowSec/60)))
+	return p.QuerySeries(ctx, promql, start, end, step)
+}
+
+func (p *SignozProvider) QuerySeries(ctx context.Context, promql string, start, end time.Time, stepSec int) (Series, error) {
 	if p.BaseURL == "" || p.APIKey == "" {
 		return Series{}, fmt.Errorf("signoz: URL or API key not configured")
 	}
 	if !end.After(start) {
 		return Series{}, fmt.Errorf("signoz: end must be after start")
 	}
-
-	windowSec := end.Sub(start).Seconds()
-	step := int(math.Max(15, math.Ceil(windowSec/60)))
+	if stepSec < 1 {
+		stepSec = 1
+	}
 
 	body := v5Request{
 		SchemaVersion: "v1",
@@ -69,7 +78,7 @@ func (p *SignozProvider) Query(ctx context.Context, promql string, start, end ti
 		CompositeQuery: compositeQuery{
 			Queries: []v5Query{{
 				Type: "promql",
-				Spec: promqSpec{Name: "A", Query: promql, Step: step},
+				Spec: promqSpec{Name: "A", Query: promql, Step: stepSec},
 			}},
 		},
 	}
