@@ -33,7 +33,7 @@ const PAGE_META = {
   deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
   alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
   ai: { title: 'AI Settings', sub: 'provider credentials and automatic root-cause analysis' },
-  explore: { title: 'Explore', sub: 'query the raw samples behind any version' },
+  explore: { title: 'Explore', sub: 'everything wardn can do, in one place' },
 }
 
 export default function App() {
@@ -162,7 +162,7 @@ export default function App() {
               <span className="header-sub">{sub}</span>
             </div>
             <div className="header-controls">
-              {page !== 'ai' && page !== 'home' && (
+              {page !== 'ai' && page !== 'home' && page !== 'explore' && (
                 <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
                   {apps.length === 0 && <option value="">no apps</option>}
                   {apps.map((a) => (
@@ -172,7 +172,7 @@ export default function App() {
                   ))}
                 </select>
               )}
-              {(page === 'dashboards' || page === 'explore') && (
+              {page === 'dashboards' && (
                 <>
                   <select className="pill" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Time range">
                     {RANGES.map(([v, label]) => (
@@ -196,7 +196,7 @@ export default function App() {
           {page === 'deploys' && <Deploys app={app} onAuthError={onAuthError} />}
           {page === 'alerting' && <Alerting apps={apps} appName={app} onAuthError={onAuthError} />}
           {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
-          {page === 'explore' && <Explore app={app} range={range} onAuthError={onAuthError} />}
+          {page === 'explore' && <Explore onNavigate={setPage} />}
           {page === 'dashboards' && (
             <div className="content-inner fade-in">
               <div className="section-label">
