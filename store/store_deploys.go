@@ -80,8 +80,8 @@ func (s *Store) CreateDeploy(ctx context.Context, app App, version, environment,
 	if status == "pending_analysis" {
 		runAfter := time.Now().UTC().Add(time.Duration(app.AnalysisDelaySeconds) * time.Second)
 		_, err = tx.ExecContext(ctx,
-			`INSERT INTO analysis_jobs (deploy_event_id, run_after) VALUES ($1, $2)`,
-			ev.ID, runAfter)
+			`INSERT INTO analysis_jobs (deploy_event_id, kind, run_after) VALUES ($1, $2, $3)`,
+			ev.ID, JobKindMetrics, runAfter)
 		if err != nil {
 			return CreateDeployResult{}, err
 		}
@@ -253,7 +253,7 @@ func (s *Store) ClaimJob(ctx context.Context, workerID string, staleAfter time.D
 	stale := time.Now().UTC().Add(-staleAfter)
 	var job AnalysisJob
 	err = tx.QueryRowContext(ctx,
-		`SELECT id, deploy_event_id, run_after, attempts, locked_by, locked_at, done_at, last_error
+		`SELECT id, deploy_event_id, kind, run_after, attempts, locked_by, locked_at, done_at, last_error
 		   FROM analysis_jobs
 		  WHERE done_at IS NULL
 		    AND run_after <= now()
@@ -261,7 +261,7 @@ func (s *Store) ClaimJob(ctx context.Context, workerID string, staleAfter time.D
 		  ORDER BY run_after
 		  FOR UPDATE SKIP LOCKED
 		  LIMIT 1`, stale).
-		Scan(&job.ID, &job.DeployEventID, &job.RunAfter, &job.Attempts,
+		Scan(&job.ID, &job.DeployEventID, &job.Kind, &job.RunAfter, &job.Attempts,
 			&job.LockedBy, &job.LockedAt, &job.DoneAt, &job.LastError)
 	if err != nil {
 		return AnalysisJob{}, DeployEvent{}, App{}, err
@@ -295,11 +295,15 @@ func (s *Store) ClaimJob(ctx context.Context, workerID string, staleAfter time.D
 	}
 	dep.AppName = app.Name
 
-	_, err = tx.ExecContext(ctx,
-		`UPDATE deploy_events SET status = 'analyzing', updated_at = now() WHERE id = $1 AND status = 'pending_analysis'`,
-		dep.ID)
-	if err != nil {
-		return AnalysisJob{}, DeployEvent{}, App{}, err
+	// Only the metrics pass owns the deploy's verdict. An AI job runs *after*
+	// a verdict exists, so it must never walk the status back to 'analyzing'.
+	if job.Kind == JobKindMetrics {
+		_, err = tx.ExecContext(ctx,
+			`UPDATE deploy_events SET status = 'analyzing', updated_at = now() WHERE id = $1 AND status = 'pending_analysis'`,
+			dep.ID)
+		if err != nil {
+			return AnalysisJob{}, DeployEvent{}, App{}, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

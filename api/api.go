@@ -18,7 +18,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"wardn/ai"
 	"wardn/alert"
+	"wardn/secret"
 	"wardn/store"
 )
 
@@ -28,12 +30,16 @@ type API struct {
 	st           *store.Store
 	alerts       *alert.Engine
 	clockSkewMax time.Duration
+	ai           *ai.Resolver
+	box          *secret.Box // nil when WARDN_SECRET_KEY is unset
 }
 
 type Options struct {
 	SessionSecret string
 	ClockSkewMax  time.Duration
 	Alerts        *alert.Engine
+	AI            *ai.Resolver
+	SecretBox     *secret.Box
 }
 
 // New wires the router.
@@ -42,7 +48,13 @@ func New(st *store.Store, opts Options) http.Handler {
 	if opts.ClockSkewMax <= 0 {
 		opts.ClockSkewMax = 24 * time.Hour
 	}
-	a := &API{st: st, alerts: opts.Alerts, clockSkewMax: opts.ClockSkewMax}
+	a := &API{
+		st:           st,
+		alerts:       opts.Alerts,
+		clockSkewMax: opts.ClockSkewMax,
+		ai:           opts.AI,
+		box:          opts.SecretBox,
+	}
 
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
@@ -81,6 +93,16 @@ func New(st *store.Store, opts Options) http.Handler {
 			authed.DELETE("/alerts/:id", a.deleteAlert)
 			authed.POST("/alerts/:id/test", a.testAlert)
 			authed.GET("/apps/:id/alert-deliveries", a.listDeliveries)
+
+			// AI reasoning (design-doc §8).
+			authed.PATCH("/apps/:id", a.patchApp)
+			authed.POST("/deploys/:id/analyze", a.analyzeDeploy)
+			authed.GET("/deploys/:id/analyses", a.listAnalyses)
+			authed.GET("/analyses/:id", a.getAnalysis)
+			authed.GET("/ai/provider", a.getAIProvider)
+			authed.PUT("/ai/provider", a.putAIProvider)
+			authed.DELETE("/ai/provider", a.deleteAIProvider)
+			authed.POST("/ai/provider/test", a.testAIProvider)
 		}
 	}
 	return r
@@ -405,7 +427,16 @@ func (a *API) getDeploy(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load snapshots"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deploy": dep, "snapshots": snaps})
+
+	body := gin.H{"deploy": dep, "snapshots": snaps}
+	// Fold in the latest AI verdict so the detail page renders in one
+	// round-trip. Absence is normal, not an error.
+	if analysis, err := a.st.LatestAnalysis(c, id); err == nil {
+		body["analysis"] = analysis
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("api: load latest analysis for deploy %d: %v", id, err)
+	}
+	c.JSON(http.StatusOK, body)
 }
 
 type alertReq struct {

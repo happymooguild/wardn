@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"wardn/ai"
 	"wardn/alert"
 	"wardn/metrics"
 	"wardn/store"
@@ -25,6 +26,14 @@ type Worker struct {
 	Alerts   *alert.Engine
 	Poll     time.Duration
 	WorkerID string
+
+	// AI reasoning (design-doc §8). Nil-safe: without a resolver or telemetry
+	// provider the metrics pass is unaffected and AI jobs fail with an
+	// actionable message rather than panicking.
+	Telemetry metrics.TelemetryProvider
+	AI        *ai.Resolver
+	Bounds    ai.Bounds
+	AITimeout time.Duration
 }
 
 func New(st *store.Store, mp metrics.MetricsProvider, alerts *alert.Engine, poll time.Duration) *Worker {
@@ -38,6 +47,7 @@ func New(st *store.Store, mp metrics.MetricsProvider, alerts *alert.Engine, poll
 		Alerts:   alerts,
 		Poll:     poll,
 		WorkerID: fmt.Sprintf("%s-%d", host, os.Getpid()),
+		Bounds:   ai.DefaultBounds(),
 	}
 }
 
@@ -48,12 +58,16 @@ func (w *Worker) Run(ctx context.Context) {
 	log.Printf("analyzer: worker %s started (poll %s)", w.WorkerID, w.Poll)
 	t := time.NewTicker(w.Poll)
 	defer t.Stop()
+	sweep := time.NewTicker(5 * time.Minute)
+	defer sweep.Stop()
 	for {
 		w.tick(ctx)
 		select {
 		case <-ctx.Done():
 			log.Print("analyzer: stopping")
 			return
+		case <-sweep.C:
+			w.sweepStaleAnalyses(ctx)
 		case <-t.C:
 		}
 	}
@@ -67,15 +81,36 @@ func (w *Worker) tick(ctx context.Context) {
 		}
 		return
 	}
-	if err := w.process(ctx, job, deploy, app); err != nil {
-		log.Printf("analyzer: job %d deploy %d: %v", job.ID, deploy.ID, err)
-		_ = w.Store.FailJob(ctx, job.ID, err.Error())
-		if job.Attempts >= maxAttempts {
-			reason := err.Error()
-			_ = w.Store.UpdateDeployStatus(ctx, deploy.ID, "failed", &reason)
-			_ = w.Store.CompleteJob(ctx, job.ID)
-		}
+
+	var perr error
+	switch job.Kind {
+	case store.JobKindAI:
+		perr = w.processAI(ctx, job, deploy, app)
+	default:
+		perr = w.process(ctx, job, deploy, app)
 	}
+	if perr == nil {
+		return
+	}
+
+	log.Printf("analyzer: %s job %d deploy %d: %v", job.Kind, job.ID, deploy.ID, perr)
+	_ = w.Store.FailJob(ctx, job.ID, perr.Error())
+	if job.Attempts < maxAttempts {
+		return
+	}
+
+	// Out of retries. Which record gets marked failed depends on the job kind:
+	// an exhausted AI job must not mark the deploy itself failed — the deploy's
+	// verdict came from the metrics pass and is still valid.
+	reason := perr.Error()
+	if job.Kind == store.JobKindAI {
+		if analysis, err := w.Store.PendingAnalysis(ctx, deploy.ID); err == nil {
+			_ = w.Store.FailAnalysis(ctx, analysis.ID, "failed", reason, map[string]any{})
+		}
+	} else {
+		_ = w.Store.UpdateDeployStatus(ctx, deploy.ID, "failed", &reason)
+	}
+	_ = w.Store.CompleteJob(ctx, job.ID)
 }
 
 func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy store.DeployEvent, app store.App) error {
@@ -222,8 +257,19 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 	}
 
 	log.Printf("analyzer: deploy %d (%s@%s) → %s", deploy.ID, app.Name, deploy.Version, status)
-	if status == "regressed" && w.Alerts != nil {
-		w.Alerts.NotifyRegression(ctx, app, deploy, snapshots)
+	if status == "regressed" {
+		if w.Alerts != nil {
+			w.Alerts.NotifyRegression(ctx, app, deploy, snapshots)
+		}
+		// Per design-doc §4: automatic root-cause runs on a regression only
+		// when the app opted in. Enqueue failures are logged, not returned —
+		// the metrics verdict is already written and must not be undone by a
+		// retry of this job.
+		if app.AIEnabled && w.AI != nil {
+			if _, err := w.Store.CreateAnalysis(ctx, deploy.ID, "auto"); err != nil {
+				log.Printf("analyzer: enqueue auto analysis for deploy %d: %v", deploy.ID, err)
+			}
+		}
 	}
 	return nil
 }
