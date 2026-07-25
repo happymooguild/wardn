@@ -1,3 +1,3 @@
 module wardn/demo/sample-app
 
-go 1.26
+go 1.22

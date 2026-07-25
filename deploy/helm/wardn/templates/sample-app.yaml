@@ -45,5 +45,7 @@ spec:
               value: {{ $.Values.sampleApp.regressed | quote }}
             - name: REGRESSION_ADD_MS
               value: {{ $.Values.sampleApp.regressionAddMs | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.sampleApp.otlpEndpoint | quote }}
 {{- end }}
 {{- end }}

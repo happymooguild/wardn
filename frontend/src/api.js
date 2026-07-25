@@ -22,7 +22,6 @@ export async function logout() {
   await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' })
 }
 
-// Returns the current user, or null if not signed in.
 export async function me() {
   const res = await fetch('/api/v1/auth/me', opts)
   if (res.status === 401) return null
@@ -54,4 +53,60 @@ export async function fetchVersionSeries(app, version, range = '1d', metric = 'l
   if (!res.ok) throw new Error(`series: ${res.status}`)
   const data = await res.json()
   return data.points ?? []
+}
+
+export async function fetchDeploys(app) {
+  const params = new URLSearchParams({ app })
+  const res = await fetch(`/api/v1/deploys?${params}`, opts)
+  if (!res.ok) throw new Error(`deploys: ${res.status}`)
+  const data = await res.json()
+  return data.deploys ?? []
+}
+
+export async function fetchDeploy(id) {
+  const res = await fetch(`/api/v1/deploys/${id}`, opts)
+  if (!res.ok) throw new Error(`deploy: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchAlerts(appId) {
+  const res = await fetch(`/api/v1/apps/${appId}/alerts`, opts)
+  if (!res.ok) throw new Error(`alerts: ${res.status}`)
+  const data = await res.json()
+  return data.alerts ?? []
+}
+
+export async function createAlert(appId, body) {
+  const res = await fetch(`/api/v1/apps/${appId}/alerts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `create alert: ${res.status}`)
+  }
+  const data = await res.json()
+  return data.alert
+}
+
+export async function deleteAlert(id) {
+  const res = await fetch(`/api/v1/alerts/${id}`, { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) throw new Error(`delete alert: ${res.status}`)
+}
+
+export async function testAlert(id) {
+  const res = await fetch(`/api/v1/alerts/${id}/test`, { method: 'POST', credentials: 'include' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `test alert: ${res.status}`)
+  }
+}
+
+export async function fetchDeliveries(appId) {
+  const res = await fetch(`/api/v1/apps/${appId}/alert-deliveries`, opts)
+  if (!res.ok) throw new Error(`deliveries: ${res.status}`)
+  const data = await res.json()
+  return data.deliveries ?? []
 }
