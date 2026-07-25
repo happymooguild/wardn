@@ -25,16 +25,30 @@ type Config struct {
 	SeedAdminUser string
 	SeedAdminPass string
 
-	SignozURL     string
-	SignozAPIKey  string
-	SignozUIURL   string
-	ClockSkewMax  time.Duration
-	AnalyzerPoll  time.Duration
-	PublicBaseURL string
+	SignozURL          string
+	SignozAPIKey       string
+	SignozUIURL        string
+	ClockSkewMax       time.Duration
+	AnalyzerPoll       time.Duration
+	PublicBaseURL      string
 	AllowLocalWebhooks bool
+
+	// AI reasoning layer. The API key here is the *fallback* used when no
+	// provider has been configured through the UI, so Compose and Helm work
+	// out of the box the same way SIGNOZ_API_KEY does.
+	AIProvider        string
+	AIModel           string
+	AIAPIKey          string
+	AIBaseURL         string
+	AITimeout         time.Duration
+	AIMaxContextChars int
+	// SecretKey encrypts provider credentials at rest. Unset means credentials
+	// cannot be stored via the UI — the env fallback still works.
+	SecretKey string
 }
 
 func Load() Config {
+	aiKind, aiKey := resolveAI()
 	return Config{
 		Port:        env("PORT", "8080"),
 		DatabaseURL: env("DATABASE_URL", "postgres://wardn:wardn@localhost:5432/wardn?sslmode=disable"),
@@ -54,7 +68,51 @@ func Load() Config {
 		AnalyzerPoll:       envDuration("ANALYZER_POLL_INTERVAL", 5*time.Second),
 		PublicBaseURL:      env("PUBLIC_BASE_URL", "http://localhost:8088"),
 		AllowLocalWebhooks: envBool("ALLOW_LOCAL_WEBHOOKS", true),
+
+		AIProvider:        aiKind,
+		AIModel:           env("AI_MODEL", ""),
+		AIAPIKey:          aiKey,
+		AIBaseURL:         env("AI_BASE_URL", ""),
+		AITimeout:         envDuration("AI_TIMEOUT", 120*time.Second),
+		AIMaxContextChars: envInt("AI_MAX_CONTEXT_CHARS", 60000),
+		SecretKey:         env("WARDN_SECRET_KEY", ""),
 	}
+}
+
+// resolveAI picks the fallback provider from the environment. Setting just
+// ANTHROPIC_API_KEY or just OPENAI_API_KEY is enough — AI_PROVIDER only needs
+// to be set to disambiguate when both are present. AI_API_KEY is the
+// provider-agnostic form, which is what the Helm chart injects from its Secret.
+func resolveAI() (kind, apiKey string) {
+	generic := os.Getenv("AI_API_KEY")
+	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
+	openaiKey := os.Getenv("OPENAI_API_KEY")
+
+	switch os.Getenv("AI_PROVIDER") {
+	case "anthropic":
+		return "anthropic", firstNonEmpty(anthropicKey, generic)
+	case "openai":
+		return "openai", firstNonEmpty(openaiKey, generic)
+	}
+	switch {
+	case anthropicKey != "":
+		return "anthropic", anthropicKey
+	case openaiKey != "":
+		return "openai", openaiKey
+	case generic != "":
+		// Provider unstated — default to Claude, matching AI_MODEL's default.
+		return "anthropic", generic
+	}
+	return "", ""
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func parseAppSeeds(s string) []AppSeed {
@@ -89,6 +147,15 @@ func envBool(key string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
 }
 
 func envDuration(key string, def time.Duration) time.Duration {

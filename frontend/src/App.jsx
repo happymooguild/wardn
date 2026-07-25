@@ -5,6 +5,7 @@ import VersionChart from './components/VersionChart.jsx'
 import Login from './components/Login.jsx'
 import Deploys from './components/Deploys.jsx'
 import Alerting from './components/Alerting.jsx'
+import AISettings from './components/AISettings.jsx'
 import { fetchApps, fetchVersions, me, logout } from './api.js'
 
 const POLL_MS = 5000
@@ -28,6 +29,7 @@ const PAGE_META = {
   dashboards: { title: 'Latency by version', sub: 'latency percentiles across every deploy' },
   deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
   alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
+  ai: { title: 'AI Settings', sub: 'provider credentials and automatic root-cause analysis' },
 }
 
 export default function App() {
@@ -61,15 +63,19 @@ export default function App() {
     else setError(String(e))
   }
 
-  // Load apps once signed in.
-  useEffect(() => {
-    if (!user) return
+  // Load apps once signed in. Exposed so AI Settings can refresh the list
+  // after toggling a per-app setting.
+  const loadApps = () =>
     fetchApps()
       .then((list) => {
         setApps(list)
-        if (list.length) setApp(list[0].name)
+        setApp((cur) => (cur || (list.length ? list[0].name : '')))
       })
       .catch(onAuthError)
+
+  useEffect(() => {
+    if (!user) return
+    loadApps()
   }, [user])
 
   // Poll per-version stats for the selected app + range (dashboards page only).
@@ -148,14 +154,16 @@ export default function App() {
               <span className="header-sub">{sub}</span>
             </div>
             <div className="header-controls">
-              <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
-                {apps.length === 0 && <option value="">no apps</option>}
-                {apps.map((a) => (
-                  <option key={a.id} value={a.name}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              {page !== 'ai' && (
+                <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
+                  {apps.length === 0 && <option value="">no apps</option>}
+                  {apps.map((a) => (
+                    <option key={a.id} value={a.name}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {page === 'dashboards' && (
                 <>
                   <select className="pill" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Time range">
@@ -178,6 +186,7 @@ export default function App() {
         <div className="content">
           {page === 'deploys' && <Deploys app={app} onAuthError={onAuthError} />}
           {page === 'alerting' && <Alerting apps={apps} appName={app} onAuthError={onAuthError} />}
+          {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
           {page === 'dashboards' && (
             <div className="content-inner fade-in">
               <div className="section-label">

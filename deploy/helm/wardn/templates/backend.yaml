@@ -45,6 +45,26 @@ spec:
               value: {{ .Values.backend.signozApiKey | quote }}
             - name: SIGNOZ_UI_URL
               value: {{ .Values.backend.signozUiUrl | quote }}
+            - name: AI_PROVIDER
+              value: {{ .Values.backend.aiProvider | quote }}
+            - name: AI_MODEL
+              value: {{ .Values.backend.aiModel | quote }}
+            - name: AI_BASE_URL
+              value: {{ .Values.backend.aiBaseUrl | quote }}
+            - name: AI_TIMEOUT
+              value: {{ .Values.backend.aiTimeout | quote }}
+            - name: AI_MAX_CONTEXT_CHARS
+              value: {{ .Values.backend.aiMaxContextChars | quote }}
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wardn-secrets
+                  key: ai-api-key
+            - name: WARDN_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wardn-secrets
+                  key: wardn-secret-key
           readinessProbe:
             httpGet:
               path: /healthz
