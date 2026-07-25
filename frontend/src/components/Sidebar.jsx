@@ -1,5 +1,4 @@
-// The left rail. Only "Dashboards" is wired for the skeleton; the rest are
-// placeholders for the stages that add Deploys, Alerting, etc.
+// The left rail. Dashboards / Deploys / Alerting are wired; Home/Explore/Admin stay decorative.
 
 const Icon = {
   home: (
@@ -44,14 +43,14 @@ const Icon = {
 }
 
 const ITEMS = [
-  ['home', 'Home', false],
-  ['grid', 'Dashboards', true],
-  ['deploys', 'Deploys', false],
-  ['alert', 'Alerting', false],
-  ['explore', 'Explore', false],
+  { icon: 'home', label: 'Home', page: null },
+  { icon: 'grid', label: 'Dashboards', page: 'dashboards' },
+  { icon: 'deploys', label: 'Deploys', page: 'deploys' },
+  { icon: 'alert', label: 'Alerting', page: 'alerting' },
+  { icon: 'explore', label: 'Explore', page: null },
 ]
 
-export default function Sidebar({ user, onLogout }) {
+export default function Sidebar({ user, page, onNavigate, onLogout }) {
   const name = user?.username ?? '—'
   const role = user?.role ?? ''
   const initials = name.slice(0, 2).toUpperCase()
@@ -65,12 +64,20 @@ export default function Sidebar({ user, onLogout }) {
         <span className="wordmark">wardn</span>
       </div>
 
-      {ITEMS.map(([icon, label, on]) => (
-        <button key={label} className={`nav${on ? ' on' : ''}`} type="button">
-          {Icon[icon]}
-          {label}
-        </button>
-      ))}
+      {ITEMS.map((item) => {
+        const on = item.page && item.page === page
+        return (
+          <button
+            key={item.label}
+            className={`nav${on ? ' on' : ''}`}
+            type="button"
+            onClick={() => item.page && onNavigate?.(item.page)}
+          >
+            {Icon[item.icon]}
+            {item.label}
+          </button>
+        )
+      })}
 
       <div className="spacer" />
 

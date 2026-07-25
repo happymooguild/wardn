@@ -1,0 +1,42 @@
+# ArgoCD Notifications recipe for wardn deploy markers.
+#
+# Apply alongside argocd-notifications-secret containing:
+#   wardn-api-key: <plaintext per-app API key>
+#
+# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  service.webhook.wardn: |
+    url: https://wardn.example.com/api/v1/deployments
+    headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: Bearer $wardn-api-key
+
+  template.app-deployed-wardn: |
+    webhook:
+      wardn:
+        method: POST
+        body: |
+          {
+            "app": "{{.app.metadata.name}}",
+            "version": "{{.app.status.sync.revision}}",
+            "environment": "production",
+            "timestamp": "{{.app.status.operationState.finishedAt}}",
+            "source": "argocd"
+          }
+
+  # oncePer avoids duplicate markers when health flaps Progressing → Healthy.
+  trigger.on-deployed: |
+    - when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      oncePer: app.status.sync.revision
+      send: [app-deployed-wardn]
+
+  subscriptions: |
+    - recipients: [webhook:wardn]
+      triggers: [on-deployed]

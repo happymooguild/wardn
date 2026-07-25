@@ -1,21 +1,31 @@
 // Package config loads runtime configuration from the environment.
-// Everything has a sensible local-dev default so `go run .` works with no setup
-// beyond a running Postgres.
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+	"time"
+)
 
 type Config struct {
-	Port        string // HTTP listen port
-	DatabaseURL string // Postgres connection string
-	SeedApp     string // name of the app seeded on startup (the sample-app posts as this)
-	SeedAPIKey  string // plaintext API key seeded for SeedApp; stored hashed
-	SeedDemo    bool   // seed synthetic multi-version history on first boot
-	SeedMetric  string // metric name to seed history for
+	Port        string
+	DatabaseURL string
+	SeedApp     string
+	SeedAPIKey  string
+	SeedDemo    bool
+	SeedMetric  string
 
-	SessionSecret string // signs the login session cookie
-	SeedAdminUser string // seeded dashboard admin username
-	SeedAdminPass string // seeded dashboard admin password (stored bcrypt-hashed)
+	SessionSecret string
+	SeedAdminUser string
+	SeedAdminPass string
+
+	SignozURL     string
+	SignozAPIKey  string
+	SignozUIURL   string
+	ClockSkewMax  time.Duration
+	AnalyzerPoll  time.Duration
+	PublicBaseURL string
+	AllowLocalWebhooks bool
 }
 
 func Load() Config {
@@ -30,6 +40,14 @@ func Load() Config {
 		SessionSecret: env("SESSION_SECRET", "dev-insecure-session-secret-change-me"),
 		SeedAdminUser: env("SEED_ADMIN_USER", "admin"),
 		SeedAdminPass: env("SEED_ADMIN_PASS", "admin@12345"),
+
+		SignozURL:          env("SIGNOZ_URL", ""),
+		SignozAPIKey:       env("SIGNOZ_API_KEY", ""),
+		SignozUIURL:        env("SIGNOZ_UI_URL", ""),
+		ClockSkewMax:       envDuration("CLOCK_SKEW_MAX", 24*time.Hour),
+		AnalyzerPoll:       envDuration("ANALYZER_POLL_INTERVAL", 5*time.Second),
+		PublicBaseURL:      env("PUBLIC_BASE_URL", "http://localhost:8088"),
+		AllowLocalWebhooks: envBool("ALLOW_LOCAL_WEBHOOKS", true),
 	}
 }
 
@@ -49,4 +67,18 @@ func envBool(key string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	if d, err := time.ParseDuration(v); err == nil {
+		return d
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		return time.Duration(secs) * time.Second
+	}
+	return def
 }
