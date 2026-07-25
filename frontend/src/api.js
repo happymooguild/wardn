@@ -110,3 +110,73 @@ export async function fetchDeliveries(appId) {
   const data = await res.json()
   return data.deliveries ?? []
 }
+
+// ---- AI reasoning ----
+
+// Queue an analysis. 202 either way: if one is already running the backend
+// returns it rather than starting a second (billable) call.
+export async function requestAnalysis(deployId) {
+  const res = await fetch(`/api/v1/deploys/${deployId}/analyze`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `analyze: ${res.status}`)
+  return data.analysis
+}
+
+export async function fetchAnalysis(id) {
+  const res = await fetch(`/api/v1/analyses/${id}`, opts)
+  if (!res.ok) throw new Error(`analysis: ${res.status}`)
+  const data = await res.json()
+  return data.analysis
+}
+
+export async function fetchAnalyses(deployId) {
+  const res = await fetch(`/api/v1/deploys/${deployId}/analyses`, opts)
+  if (!res.ok) throw new Error(`analyses: ${res.status}`)
+  const data = await res.json()
+  return data.analyses ?? []
+}
+
+export async function fetchAIProvider() {
+  const res = await fetch('/api/v1/ai/provider', opts)
+  if (!res.ok) throw new Error(`ai provider: ${res.status}`)
+  return res.json()
+}
+
+export async function saveAIProvider(body) {
+  const res = await fetch('/api/v1/ai/provider', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `save provider: ${res.status}`)
+  return data.provider
+}
+
+export async function deleteAIProvider() {
+  const res = await fetch('/api/v1/ai/provider', { method: 'DELETE', credentials: 'include' })
+  if (!res.ok) throw new Error(`delete provider: ${res.status}`)
+}
+
+export async function testAIProvider() {
+  const res = await fetch('/api/v1/ai/provider/test', { method: 'POST', credentials: 'include' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `test provider: ${res.status}`)
+  return data
+}
+
+export async function setAppAIEnabled(appId, enabled) {
+  const res = await fetch(`/api/v1/apps/${appId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ ai_enabled: enabled }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `update app: ${res.status}`)
+  return data.app
+}

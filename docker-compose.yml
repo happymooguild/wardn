@@ -37,6 +37,15 @@ services:
       # (per-app window_seconds defaults to 120 in DB; override via SQL if needed)
       ANALYZER_POLL_INTERVAL: 5s
       CLOCK_SKEW_MAX: 24h
+      # AI root-cause analysis (optional). Either set a key here, or configure
+      # one in the UI under AI Settings — WARDN_SECRET_KEY is what lets the UI
+      # store it encrypted.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_TIMEOUT: 120s
+      WARDN_SECRET_KEY: ${WARDN_SECRET_KEY:-dev-insecure-secret-key-change-me}
     ports:
       - "8080:8080"
     depends_on:

@@ -514,3 +514,81 @@ select.pill:hover { border-color: var(--border-hover); }
 @media (max-width: 1100px) {
   .alert-form { grid-template-columns: 1fr 1fr; }
 }
+
+/* ============================================================
+   AI reasoning — "Ask AI" verdict panel + provider settings
+   ============================================================ */
+.ai-panel {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--panel-2);
+}
+.ai-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ai-error {
+  font-size: 12.5px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ai-notice {
+  font-size: 12.5px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ai-verdict { display: flex; flex-direction: column; gap: 10px; }
+.ai-cause-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ai-summary { font-size: 12.5px; color: var(--text-muted); }
+/* The answer itself — the one thing an on-call engineer reads first. */
+.ai-cause {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-bright);
+}
+.ai-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.ai-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.ai-list li { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.ai-list.mono li { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-code); word-break: break-word; }
+/* Provenance: how much of the available signal actually reached the model. */
+.ai-stats {
+  font-size: 11.5px;
+  line-height: 1.5;
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+  margin-top: 2px;
+}
+.conf-high { color: var(--accent); border-color: var(--accent-border); background: var(--accent-bg); }
+.conf-medium { color: #c9b27a; border-color: #3a3420; background: #16140e; }
+.conf-low { color: var(--text-dim); }
+.badge-env { color: #c9b27a; border-color: #3a3420; background: #16140e; }
+
+.ai-form { display: flex; flex-direction: column; gap: 12px; }
+.ai-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ai-form .row-actions { justify-content: flex-start; margin-top: 2px; }
+.ai-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; }
+.ai-toggle input { accent-color: var(--accent-2); cursor: pointer; }
+.ai-toggle input:disabled { cursor: not-allowed; }

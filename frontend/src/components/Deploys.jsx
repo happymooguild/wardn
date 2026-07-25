@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchDeploys, fetchDeploy } from '../api.js'
+import AskAI from './AskAI.jsx'
 
 const POLL_MS = 5000
 
@@ -154,6 +155,12 @@ export default function Deploys({ app, onAuthError }) {
                     ))}
                   </div>
                 )}
+
+                <AskAI
+                  deployId={detail.deploy.id}
+                  initial={detail.analysis}
+                  onAuthError={onAuthError}
+                />
               </>
             )}
           </div>

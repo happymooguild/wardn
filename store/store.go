@@ -22,6 +22,9 @@ type App struct {
 	LatencyThresholdPct  float64 `json:"latency_threshold_pct"`
 	ErrorRateThresholdPP float64 `json:"error_rate_threshold_pp"`
 	MinRequests          int     `json:"min_requests"`
+	// AIEnabled opts this app into automatic root-cause analysis on a
+	// regression (design-doc §4: "if regression found AND app opted in").
+	AIEnabled bool `json:"ai_enabled"`
 }
 
 // User is a dashboard login. Role is 'admin' for now (RBAC comes in a later stage).
@@ -114,15 +117,57 @@ type MetricSnapshot struct {
 	CreatedAt          time.Time     `json:"created_at"`
 }
 
+// Job kinds. "metrics" is the statistical before/after comparison; "ai" is the
+// LLM root-cause pass, which runs only after a verdict exists.
+const (
+	JobKindMetrics = "metrics"
+	JobKindAI      = "ai"
+)
+
 type AnalysisJob struct {
 	ID            int64
 	DeployEventID int64
+	Kind          string
 	RunAfter      time.Time
 	Attempts      int
 	LockedBy      sql.NullString
 	LockedAt      sql.NullTime
 	DoneAt        sql.NullTime
 	LastError     sql.NullString
+}
+
+// AIProvider is a configured LLM credential. The key itself is never in this
+// struct — it lives encrypted in the DB and is only decrypted at call time.
+type AIProvider struct {
+	ID        int64     `json:"id"`
+	Kind      string    `json:"kind"`
+	Model     string    `json:"model"`
+	BaseURL   string    `json:"base_url,omitempty"`
+	KeyLast4  string    `json:"key_last4"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Analysis is one AI root-cause attempt for a deploy.
+type Analysis struct {
+	ID             int64           `json:"id"`
+	DeployEventID  int64           `json:"deploy_event_id"`
+	Status         string          `json:"status"`
+	Trigger        string          `json:"trigger"`
+	Provider       string          `json:"provider,omitempty"`
+	Model          string          `json:"model,omitempty"`
+	Summary        *string         `json:"summary,omitempty"`
+	LikelyCause    *string         `json:"likely_cause,omitempty"`
+	Confidence     *string         `json:"confidence,omitempty"`
+	Evidence       json.RawMessage `json:"evidence"`
+	SuggestedSteps json.RawMessage `json:"suggested_steps"`
+	ContextStats   json.RawMessage `json:"context_stats"`
+	InputTokens    *int            `json:"input_tokens,omitempty"`
+	OutputTokens   *int            `json:"output_tokens,omitempty"`
+	Error          *string         `json:"error,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
 }
 
 type AlertConfig struct {
@@ -279,6 +324,54 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
     UNIQUE (alert_config_id, deploy_event_id)
 );
 
+-- AI reasoning layer (design-doc §8).
+-- Note: 'analysis_jobs' / 'pending_analysis' above mean the *statistical*
+-- before/after comparison. Anything AI-related is named ai_* or analyses.
+
+ALTER TABLE analysis_jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'metrics';
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS ai_providers (
+    id           BIGSERIAL PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK (kind IN ('anthropic','openai')),
+    model        TEXT NOT NULL,
+    base_url     TEXT NOT NULL DEFAULT '',
+    api_key_enc  BYTEA NOT NULL,
+    key_last4    TEXT NOT NULL DEFAULT '',
+    enabled      BOOLEAN NOT NULL DEFAULT true,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- At most one active provider at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS ai_providers_one_enabled
+  ON ai_providers ((enabled)) WHERE enabled;
+
+CREATE TABLE IF NOT EXISTS analyses (
+    id               BIGSERIAL PRIMARY KEY,
+    deploy_event_id  BIGINT NOT NULL REFERENCES deploy_events(id) ON DELETE CASCADE,
+    status           TEXT NOT NULL CHECK (status IN
+                       ('pending','running','succeeded','failed','refused')),
+    -- 'trigger' and 'error' are keywords; the suffixed names keep the DDL
+    -- unambiguous and match alert_deliveries.error_message.
+    trigger_source   TEXT NOT NULL CHECK (trigger_source IN ('auto','manual')),
+    provider         TEXT NOT NULL DEFAULT '',
+    model            TEXT NOT NULL DEFAULT '',
+    summary          TEXT,
+    likely_cause     TEXT,
+    confidence       TEXT,
+    evidence         JSONB NOT NULL DEFAULT '[]',
+    suggested_steps  JSONB NOT NULL DEFAULT '[]',
+    context_stats    JSONB NOT NULL DEFAULT '{}',
+    input_tokens     INT,
+    output_tokens    INT,
+    error_message    TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS analyses_deploy ON analyses (deploy_event_id, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_ts      ON metrics (app_id, name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_version ON metrics (app_id, name, version);
 
@@ -325,7 +418,8 @@ func (s *Store) Migrate(ctx context.Context) error {
 }
 
 const appSelectCols = `id, name, environment, signoz_service_name, window_seconds,
-	analysis_delay_seconds, latency_threshold_pct, error_rate_threshold_pp, min_requests`
+	analysis_delay_seconds, latency_threshold_pct, error_rate_threshold_pp, min_requests,
+	ai_enabled`
 
 func scanApp(scanner interface {
 	Scan(dest ...any) error
@@ -334,6 +428,7 @@ func scanApp(scanner interface {
 	err := scanner.Scan(
 		&a.ID, &a.Name, &a.Environment, &a.SignozServiceName, &a.WindowSeconds,
 		&a.AnalysisDelaySeconds, &a.LatencyThresholdPct, &a.ErrorRateThresholdPP, &a.MinRequests,
+		&a.AIEnabled,
 	)
 	return a, err
 }
