@@ -10,7 +10,7 @@ import (
 	"math/rand"
 	"time"
 
-	"wardn/internal/store"
+	"wardn/store"
 )
 
 // Run inserts `versions` sequential versions, each a 30-minute block of samples

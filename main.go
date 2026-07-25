@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"wardn/internal/api"
-	"wardn/internal/config"
-	"wardn/internal/seed"
-	"wardn/internal/store"
+	"wardn/api"
+	"wardn/config"
+	"wardn/seed"
+	"wardn/store"
 )
 
 func main() {

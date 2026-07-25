@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"wardn/internal/store"
+	"wardn/store"
 )
 
 type API struct{ st *store.Store }
