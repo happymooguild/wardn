@@ -163,7 +163,9 @@ func Build(in Input, b Bounds) (Request, Stats) {
 	stats.TracesSentBefore = nBeforeSpans
 	stats.PromptChars = len(prompt)
 
-	return Request{System: systemPrompt, Prompt: prompt, MaxTokens: 4096}, stats
+	// 8192 leaves room for adaptive thinking to share the output budget with the
+	// (small) JSON verdict without truncating mid-thought.
+	return Request{System: systemPrompt, Prompt: prompt, MaxTokens: 8192}, stats
 }
 
 // groupLogs collapses near-identical lines, most frequent first. Severity

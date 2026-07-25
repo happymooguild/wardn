@@ -12,16 +12,17 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// DefaultAnthropicModel is Claude Opus 5 — 1M context, strongest on the kind of
-// multi-signal reasoning this feature needs.
-const DefaultAnthropicModel = "claude-opus-5"
+// DefaultAnthropicModel is Claude Opus 4.8 — the latest Opus, 1M context,
+// strongest on the kind of multi-signal reasoning this feature needs.
+const DefaultAnthropicModel = "claude-opus-4-8"
 
 // Anthropic talks to the Claude API via the official Go SDK.
 //
-// Opus 5 notes that shape this code:
+// Opus 4.8 notes that shape this code:
 //   - temperature / top_p / top_k are removed (400 if sent) — we never set them.
-//   - budget_tokens is removed; thinking is on by default. Depth is controlled
-//     with output_config.effort instead.
+//   - budget_tokens is removed; on the Opus family thinking is OFF unless asked
+//     for, so we set thinking to adaptive explicitly. Depth is tuned with
+//     output_config.effort.
 //   - a safety-classifier decline is HTTP 200 with stop_reason "refusal" and
 //     empty/partial content, so stop_reason is checked before reading content.
 type Anthropic struct {
@@ -55,7 +56,7 @@ func (a *Anthropic) Name() string { return "anthropic" }
 func (a *Anthropic) Analyze(ctx context.Context, req Request) (Result, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
-		maxTokens = 4096
+		maxTokens = 8192
 	}
 
 	msg, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
@@ -65,6 +66,10 @@ func (a *Anthropic) Analyze(ctx context.Context, req Request) (Result, error) {
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(req.Prompt)),
 		},
+		// Opus needs thinking enabled explicitly — the whole point here is
+		// reasoning over the before/after signals. Adaptive lets Claude pick
+		// the depth; effort tunes the overall spend.
+		Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
 		OutputConfig: anthropic.OutputConfigParam{
 			Effort: a.effort,
 			Format: anthropic.JSONOutputFormatParam{Schema: VerdictSchema()},
