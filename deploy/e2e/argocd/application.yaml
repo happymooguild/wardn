@@ -1,0 +1,23 @@
+# The storefront app, managed by ArgoCD from the in-cluster Gitea repo.
+# Its metadata.name = "storefront" must match the wardn app + API key so the
+# deploy marker authenticates and scopes correctly.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: storefront
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: http://gitea.gitea.svc.cluster.local:3000/wardn/demo.git
+    targetRevision: HEAD
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
