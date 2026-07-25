@@ -124,6 +124,13 @@ export async function fetchDeliveries(appId) {
   return data.deliveries ?? []
 }
 
+export async function fetchMetricDefinitions() {
+  const res = await fetch('/api/v1/metric-definitions', opts)
+  if (!res.ok) throw new Error(`metric-definitions: ${res.status}`)
+  const data = await res.json()
+  return data.metrics ?? []
+}
+
 // ---- AI reasoning ----
 
 // Queue an analysis. 202 either way: if one is already running the backend
