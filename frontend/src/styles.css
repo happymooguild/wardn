@@ -639,3 +639,13 @@ select.pill:hover { border-color: var(--border-hover); }
 }
 .key-warn b { color: var(--danger); }
 .copy-btn { flex-shrink: 0; }
+
+/* --- Deploys: services list + drill-in --- */
+.back-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-family: var(--font-sans); font-size: inherit;
+  letter-spacing: inherit; text-transform: none;
+}
+.back-link:hover { color: var(--accent-hover); }
+.apps-table .app-name { font-weight: 600; color: var(--text-bright); }
+.apps-table tbody tr:hover .app-name { color: var(--accent); }
