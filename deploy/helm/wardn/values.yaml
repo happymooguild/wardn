@@ -31,6 +31,16 @@ backend:
   signozUrl: ""
   signozApiKey: ""
   signozUiUrl: ""
+  # AI root-cause analysis. Leave aiApiKey empty to configure the provider
+  # through the UI instead (AI Settings) — secretKey is what allows the UI to
+  # store a key encrypted at rest. Both land in the chart's Secret.
+  aiProvider: ""   # anthropic | openai — inferred from the key if left empty
+  aiModel: ""      # defaults to claude-opus-5 for anthropic
+  aiApiKey: ""
+  aiBaseUrl: ""
+  aiTimeout: 120s
+  aiMaxContextChars: "60000"
+  secretKey: ""    # set to a long random string to enable UI-stored AI keys
 
 frontend:
   image: wardn-frontend:dev

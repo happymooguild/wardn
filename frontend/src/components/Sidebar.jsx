@@ -34,6 +34,12 @@ const Icon = {
       <path d="M13 13L17 17" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   ),
+  ai: (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+      <path d="M10 2.5L11.6 7.2L16.5 8L11.6 8.8L10 13.5L8.4 8.8L3.5 8L8.4 7.2L10 2.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M15 13L15.7 15.1L17.8 15.8L15.7 16.5L15 18.6L14.3 16.5L12.2 15.8L14.3 15.1L15 13Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  ),
   admin: (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
       <circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="1.6" />
@@ -47,6 +53,7 @@ const ITEMS = [
   { icon: 'grid', label: 'Dashboards', page: 'dashboards' },
   { icon: 'deploys', label: 'Deploys', page: 'deploys' },
   { icon: 'alert', label: 'Alerting', page: 'alerting' },
+  { icon: 'ai', label: 'AI Settings', page: 'ai' },
   { icon: 'explore', label: 'Explore', page: null },
 ]
 

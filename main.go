@@ -11,12 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"wardn/ai"
 	"wardn/alert"
 	"wardn/analyzer"
 	"wardn/api"
 	"wardn/config"
 	"wardn/demo/seed"
 	"wardn/metrics"
+	"wardn/secret"
 	"wardn/store"
 )
 
@@ -65,16 +67,50 @@ func main() {
 	alertEngine := alert.New(st, cfg.PublicBaseURL, cfg.AllowLocalWebhooks)
 
 	var provider metrics.MetricsProvider
+	var telemetry metrics.TelemetryProvider
 	if cfg.SignozURL != "" && cfg.SignozAPIKey != "" {
-		provider = metrics.NewSignoz(cfg.SignozURL, cfg.SignozAPIKey)
+		signoz := metrics.NewSignoz(cfg.SignozURL, cfg.SignozAPIKey)
+		provider, telemetry = signoz, signoz
 		log.Printf("signoz metrics provider configured (%s)", cfg.SignozURL)
 	} else {
 		log.Print("SIGNOZ_URL / SIGNOZ_API_KEY unset — analyzer will fail jobs until configured")
 	}
 
+	// Credentials can be encrypted at rest only if an encryption key exists.
+	// Without one the env fallback still works; the UI just can't store keys.
+	var box *secret.Box
+	if b, err := secret.NewBox(cfg.SecretKey); err == nil {
+		box = b
+	} else {
+		log.Print("WARDN_SECRET_KEY unset — AI keys cannot be saved from the UI; " +
+			"set ANTHROPIC_API_KEY / OPENAI_API_KEY instead")
+	}
+
+	aiResolver := &ai.Resolver{
+		Store:   st,
+		Box:     box,
+		Timeout: cfg.AITimeout,
+		Env: ai.Credential{
+			Kind:    cfg.AIProvider,
+			APIKey:  cfg.AIAPIKey,
+			Model:   cfg.AIModel,
+			BaseURL: cfg.AIBaseURL,
+		},
+	}
+	if cfg.AIAPIKey != "" {
+		log.Printf("ai provider %q configured from environment", cfg.AIProvider)
+	}
+
+	bounds := ai.DefaultBounds()
+	bounds.MaxTotalChars = cfg.AIMaxContextChars
+
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 	defer workerCancel()
 	worker := analyzer.New(st, provider, alertEngine, cfg.AnalyzerPoll)
+	worker.Telemetry = telemetry
+	worker.AI = aiResolver
+	worker.Bounds = bounds
+	worker.AITimeout = cfg.AITimeout
 	go worker.Run(workerCtx)
 
 	srv := &http.Server{
@@ -83,6 +119,8 @@ func main() {
 			SessionSecret: cfg.SessionSecret,
 			ClockSkewMax:  cfg.ClockSkewMax,
 			Alerts:        alertEngine,
+			AI:            aiResolver,
+			SecretBox:     box,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
