@@ -1,15 +1,10 @@
-// Package store is the Postgres data layer for the skeleton.
-//
-// Scope for now is intentionally small: registered apps (each with a hashed API
-// key) and a metrics table where every sample carries the app version it was
-// observed on. That version dimension is what powers the version-by-version
-// comparison on the dashboard. This is the seam the fuller data model from the
-// design doc (deploy_events, snapshots, analyses, RBAC, ...) grows into later.
+// Package store is the Postgres data layer.
 package store
 
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -18,8 +13,15 @@ import (
 type Store struct{ db *sql.DB }
 
 type App struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID                   int64   `json:"id"`
+	Name                 string  `json:"name"`
+	Environment          string  `json:"environment"`
+	SignozServiceName    string  `json:"signoz_service_name"`
+	WindowSeconds        int     `json:"window_seconds"`
+	AnalysisDelaySeconds int     `json:"analysis_delay_seconds"`
+	LatencyThresholdPct  float64 `json:"latency_threshold_pct"`
+	ErrorRateThresholdPP float64 `json:"error_rate_threshold_pp"`
+	MinRequests          int     `json:"min_requests"`
 }
 
 // User is a dashboard login. Role is 'admin' for now (RBAC comes in a later stage).
@@ -43,8 +45,7 @@ type Sample struct {
 	TS      time.Time
 }
 
-// VersionStat is the aggregated latency profile of a single app version:
-// the percentiles the dashboard plots + drills into.
+// VersionStat is the aggregated latency profile of a single app version.
 type VersionStat struct {
 	Version string    `json:"version"`
 	P50     float64   `json:"p50"`
@@ -56,7 +57,95 @@ type VersionStat struct {
 	LastTS  time.Time `json:"last_ts"`
 }
 
-// schema is applied idempotently on every boot.
+type MetricDefinition struct {
+	Key            string `json:"key"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	PromQLTemplate string `json:"promql_template"`
+	Unit           string `json:"unit"`
+	HigherIsWorse  bool   `json:"higher_is_worse"`
+}
+
+type AppMetric struct {
+	AppID     int64  `json:"app_id"`
+	MetricKey string `json:"metric_key"`
+	Enabled   bool   `json:"enabled"`
+}
+
+type DeployEvent struct {
+	ID              int64     `json:"id"`
+	AppID           int64     `json:"app_id"`
+	AppName         string    `json:"app,omitempty"`
+	Version         string    `json:"version"`
+	PreviousVersion *string   `json:"previous_version"`
+	Environment     string    `json:"environment"`
+	DeployedAt      time.Time `json:"deployed_at"`
+	Source          string    `json:"source"`
+	Status          string    `json:"status"`
+	IdempotencyKey  string    `json:"idempotency_key,omitempty"`
+	FailureReason   *string   `json:"failure_reason,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+type SeriesPoint struct {
+	T int64   `json:"t"`
+	V float64 `json:"v"`
+}
+
+type MetricSnapshot struct {
+	ID                 int64         `json:"id"`
+	DeployEventID      int64         `json:"deploy_event_id"`
+	MetricKey          string        `json:"metric_key"`
+	WindowBeforeStart  time.Time     `json:"window_before_start"`
+	WindowBeforeEnd    time.Time     `json:"window_before_end"`
+	WindowAfterStart   time.Time     `json:"window_after_start"`
+	WindowAfterEnd     time.Time     `json:"window_after_end"`
+	BeforeValue        *float64      `json:"before_value"`
+	AfterValue         *float64      `json:"after_value"`
+	BeforeRequestCount *int64        `json:"before_request_count"`
+	AfterRequestCount  *int64        `json:"after_request_count"`
+	DeltaPct           *float64      `json:"delta_pct"`
+	DeltaAbs           *float64      `json:"delta_abs"`
+	Degraded           bool          `json:"degraded"`
+	SeriesBefore       []SeriesPoint `json:"series_before"`
+	SeriesAfter        []SeriesPoint `json:"series_after"`
+	RawQuery           string        `json:"raw_query,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+}
+
+type AnalysisJob struct {
+	ID            int64
+	DeployEventID int64
+	RunAfter      time.Time
+	Attempts      int
+	LockedBy      sql.NullString
+	LockedAt      sql.NullTime
+	DoneAt        sql.NullTime
+	LastError     sql.NullString
+}
+
+type AlertConfig struct {
+	ID            int64           `json:"id"`
+	AppID         int64           `json:"app_id"`
+	MetricKey     *string         `json:"metric_key"`
+	ChannelType   string          `json:"channel_type"`
+	ChannelConfig json.RawMessage `json:"channel_config"`
+	OnVerdict     string          `json:"on_verdict"`
+	Enabled       bool            `json:"enabled"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
+type AlertDelivery struct {
+	ID            int64     `json:"id"`
+	AlertConfigID int64     `json:"alert_config_id"`
+	DeployEventID int64     `json:"deploy_event_id"`
+	Status        string    `json:"status"`
+	ResponseCode  *int      `json:"response_code,omitempty"`
+	ErrorMessage  *string   `json:"error_message,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS apps (
     id           BIGSERIAL PRIMARY KEY,
@@ -82,11 +171,138 @@ CREATE TABLE IF NOT EXISTS metrics (
     ts      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- for databases created before the version column existed
 ALTER TABLE metrics ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'production';
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS signoz_service_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS window_seconds INT NOT NULL DEFAULT 120;
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS analysis_delay_seconds INT NOT NULL DEFAULT 30;
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS latency_threshold_pct DOUBLE PRECISION NOT NULL DEFAULT 25;
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS error_rate_threshold_pp DOUBLE PRECISION NOT NULL DEFAULT 1.0;
+ALTER TABLE apps ADD COLUMN IF NOT EXISTS min_requests INT NOT NULL DEFAULT 10;
+
+UPDATE apps SET signoz_service_name = name WHERE signoz_service_name = '' OR signoz_service_name IS NULL;
+
+CREATE TABLE IF NOT EXISTS metric_definitions (
+    key              TEXT PRIMARY KEY,
+    name             TEXT NOT NULL,
+    description      TEXT NOT NULL DEFAULT '',
+    promql_template  TEXT NOT NULL,
+    unit             TEXT NOT NULL DEFAULT '',
+    higher_is_worse  BOOLEAN NOT NULL DEFAULT true,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS app_metrics (
+    app_id     BIGINT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    metric_key TEXT NOT NULL REFERENCES metric_definitions(key),
+    enabled    BOOLEAN NOT NULL DEFAULT true,
+    PRIMARY KEY (app_id, metric_key)
+);
+
+CREATE TABLE IF NOT EXISTS deploy_events (
+    id               BIGSERIAL PRIMARY KEY,
+    app_id           BIGINT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    version          TEXT NOT NULL,
+    previous_version TEXT,
+    environment      TEXT NOT NULL,
+    deployed_at      TIMESTAMPTZ NOT NULL,
+    source           TEXT NOT NULL CHECK (source IN ('ci','argocd','flux','manual')),
+    status           TEXT NOT NULL CHECK (status IN (
+                       'received','pending_analysis','analyzing',
+                       'healthy','regressed','inconclusive','failed'
+                     )),
+    idempotency_key  TEXT NOT NULL UNIQUE,
+    failure_reason   TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS deploy_events_app_time ON deploy_events (app_id, deployed_at DESC);
+
+CREATE TABLE IF NOT EXISTS metric_snapshots (
+    id                   BIGSERIAL PRIMARY KEY,
+    deploy_event_id      BIGINT NOT NULL REFERENCES deploy_events(id) ON DELETE CASCADE,
+    metric_key           TEXT NOT NULL,
+    window_before_start  TIMESTAMPTZ NOT NULL,
+    window_before_end    TIMESTAMPTZ NOT NULL,
+    window_after_start   TIMESTAMPTZ NOT NULL,
+    window_after_end     TIMESTAMPTZ NOT NULL,
+    before_value         DOUBLE PRECISION,
+    after_value          DOUBLE PRECISION,
+    before_request_count BIGINT,
+    after_request_count  BIGINT,
+    delta_pct            DOUBLE PRECISION,
+    delta_abs            DOUBLE PRECISION,
+    degraded             BOOLEAN NOT NULL DEFAULT false,
+    series_before        JSONB NOT NULL DEFAULT '[]',
+    series_after         JSONB NOT NULL DEFAULT '[]',
+    raw_query            TEXT,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (deploy_event_id, metric_key)
+);
+
+CREATE TABLE IF NOT EXISTS analysis_jobs (
+    id              BIGSERIAL PRIMARY KEY,
+    deploy_event_id BIGINT NOT NULL REFERENCES deploy_events(id) ON DELETE CASCADE,
+    run_after       TIMESTAMPTZ NOT NULL,
+    attempts        INT NOT NULL DEFAULT 0,
+    locked_by       TEXT,
+    locked_at       TIMESTAMPTZ,
+    done_at         TIMESTAMPTZ,
+    last_error      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS analysis_jobs_claim ON analysis_jobs (run_after)
+  WHERE done_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS alert_configs (
+    id             BIGSERIAL PRIMARY KEY,
+    app_id         BIGINT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+    metric_key     TEXT,
+    channel_type   TEXT NOT NULL CHECK (channel_type IN ('slack','webhook')),
+    channel_config JSONB NOT NULL,
+    on_verdict     TEXT NOT NULL DEFAULT 'regressed',
+    enabled        BOOLEAN NOT NULL DEFAULT true,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS alert_deliveries (
+    id              BIGSERIAL PRIMARY KEY,
+    alert_config_id BIGINT NOT NULL REFERENCES alert_configs(id) ON DELETE CASCADE,
+    deploy_event_id BIGINT NOT NULL REFERENCES deploy_events(id) ON DELETE CASCADE,
+    status          TEXT NOT NULL,
+    response_code   INT,
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (alert_config_id, deploy_event_id)
+);
 
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_ts      ON metrics (app_id, name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_version ON metrics (app_id, name, version);
+
+INSERT INTO metric_definitions (key, name, description, promql_template, unit, higher_is_worse)
+VALUES
+  (
+    'latency_p99',
+    'Latency p99',
+    'Demo latency gauge from sample-app OTLP (swap for real APM PromQL in production)',
+    'avg(wardn_demo_latency_ms{service_name="{{service}}"})',
+    'ms',
+    true
+  ),
+  (
+    'error_rate',
+    'Error rate',
+    'Demo error-rate gauge from sample-app OTLP (swap for real APM PromQL in production)',
+    'avg(wardn_demo_error_rate{service_name="{{service}}"})',
+    'percent',
+    true
+  )
+ON CONFLICT (key) DO UPDATE SET
+  promql_template = EXCLUDED.promql_template,
+  description = EXCLUDED.description;
 `
 
 func Open(url string) (*Store, error) {
@@ -108,19 +324,44 @@ func (s *Store) Migrate(ctx context.Context) error {
 	return err
 }
 
+const appSelectCols = `id, name, environment, signoz_service_name, window_seconds,
+	analysis_delay_seconds, latency_threshold_pct, error_rate_threshold_pp, min_requests`
+
+func scanApp(scanner interface {
+	Scan(dest ...any) error
+}) (App, error) {
+	var a App
+	err := scanner.Scan(
+		&a.ID, &a.Name, &a.Environment, &a.SignozServiceName, &a.WindowSeconds,
+		&a.AnalysisDelaySeconds, &a.LatencyThresholdPct, &a.ErrorRateThresholdPP, &a.MinRequests,
+	)
+	return a, err
+}
+
 // SeedApp upserts an app + its hashed key and returns the app id.
 func (s *Store) SeedApp(ctx context.Context, name, apiKeyHash string) (int64, error) {
 	var id int64
 	err := s.db.QueryRowContext(ctx,
-		`INSERT INTO apps (name, api_key_hash) VALUES ($1, $2)
-		 ON CONFLICT (name) DO UPDATE SET api_key_hash = EXCLUDED.api_key_hash
+		`INSERT INTO apps (name, api_key_hash, signoz_service_name)
+		 VALUES ($1, $2, $1)
+		 ON CONFLICT (name) DO UPDATE SET
+		   api_key_hash = EXCLUDED.api_key_hash,
+		   signoz_service_name = CASE
+		     WHEN apps.signoz_service_name = '' THEN EXCLUDED.signoz_service_name
+		     ELSE apps.signoz_service_name
+		   END
 		 RETURNING id`,
 		name, apiKeyHash).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO app_metrics (app_id, metric_key, enabled) VALUES
+		 ($1, 'latency_p99', true), ($1, 'error_rate', true)
+		 ON CONFLICT DO NOTHING`, id)
 	return id, err
 }
 
-// SeedUser inserts a user if one with that username doesn't already exist
-// (DO NOTHING keeps a later password change from being reset on every boot).
 func (s *Store) SeedUser(ctx context.Context, username, passwordHash, role string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)
@@ -129,7 +370,6 @@ func (s *Store) SeedUser(ctx context.Context, username, passwordHash, role strin
 	return err
 }
 
-// UserByUsername looks up a login. sql.ErrNoRows means no such user.
 func (s *Store) UserByUsername(ctx context.Context, username string) (User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx,
@@ -138,13 +378,22 @@ func (s *Store) UserByUsername(ctx context.Context, username string) (User, erro
 	return u, err
 }
 
-// AppByAPIKeyHash resolves the app an API key belongs to. sql.ErrNoRows means
-// the key is unknown -> the caller should return 401.
 func (s *Store) AppByAPIKeyHash(ctx context.Context, hash string) (App, error) {
-	var a App
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name FROM apps WHERE api_key_hash = $1`, hash).Scan(&a.ID, &a.Name)
-	return a, err
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+appSelectCols+` FROM apps WHERE api_key_hash = $1`, hash)
+	return scanApp(row)
+}
+
+func (s *Store) AppByID(ctx context.Context, id int64) (App, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+appSelectCols+` FROM apps WHERE id = $1`, id)
+	return scanApp(row)
+}
+
+func (s *Store) AppByName(ctx context.Context, name string) (App, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+appSelectCols+` FROM apps WHERE name = $1`, name)
+	return scanApp(row)
 }
 
 func (s *Store) InsertMetric(ctx context.Context, appID int64, name, version string, value float64, ts time.Time) error {
@@ -154,13 +403,12 @@ func (s *Store) InsertMetric(ctx context.Context, appID int64, name, version str
 	return err
 }
 
-// InsertSamples bulk-inserts many samples in one transaction (used by the seeder).
 func (s *Store) InsertSamples(ctx context.Context, appID int64, name string, samples []Sample) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // no-op after a successful commit
+	defer tx.Rollback() //nolint:errcheck
 
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO metrics (app_id, name, version, value, ts) VALUES ($1, $2, $3, $4, $5)`)
@@ -177,8 +425,6 @@ func (s *Store) InsertSamples(ctx context.Context, appID int64, name string, sam
 	return tx.Commit()
 }
 
-// CountVersioned returns how many versioned samples exist for an app+metric.
-// Used to make seeding idempotent (only seed an empty dataset).
 func (s *Store) CountVersioned(ctx context.Context, appName, metric string) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
@@ -189,9 +435,6 @@ func (s *Store) CountVersioned(ctx context.Context, appName, metric string) (int
 	return n, err
 }
 
-// VersionsWithStats returns one row per version with its latency percentiles,
-// ordered chronologically (by when the version first appeared) so the chart's
-// x-axis reads left-to-right as deploy history.
 func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string) ([]VersionStat, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.version,
@@ -224,8 +467,6 @@ func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string) (
 	return out, rows.Err()
 }
 
-// VersionSeries returns the raw samples for one version, oldest first — the
-// detail time-series shown when a version is selected.
 func (s *Store) VersionSeries(ctx context.Context, appName, metric, version string) ([]Point, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.ts, m.value
@@ -251,7 +492,8 @@ func (s *Store) VersionSeries(ctx context.Context, appName, metric, version stri
 }
 
 func (s *Store) ListApps(ctx context.Context) ([]App, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name FROM apps ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+appSelectCols+` FROM apps ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -259,8 +501,8 @@ func (s *Store) ListApps(ctx context.Context) ([]App, error) {
 
 	apps := make([]App, 0, 8)
 	for rows.Next() {
-		var a App
-		if err := rows.Scan(&a.ID, &a.Name); err != nil {
+		a, err := scanApp(rows)
+		if err != nil {
 			return nil, err
 		}
 		apps = append(apps, a)

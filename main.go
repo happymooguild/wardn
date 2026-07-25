@@ -1,5 +1,5 @@
-// Command wardn-backend is the skeleton API server: it ingests metric samples
-// from registered apps and serves them back to the dashboard.
+// Command wardn-backend is the API server: metric ingest, deploy markers,
+// SigNoz-backed analysis, and alerting.
 package main
 
 import (
@@ -11,9 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"wardn/alert"
+	"wardn/analyzer"
 	"wardn/api"
 	"wardn/config"
 	"wardn/demo/seed"
+	"wardn/metrics"
 	"wardn/store"
 )
 
@@ -46,7 +49,6 @@ func main() {
 		}
 	}
 
-	// Seed the admin login so the dashboard is reachable during testing.
 	adminHash, err := api.HashPassword(cfg.SeedAdminPass)
 	if err != nil {
 		log.Fatalf("hash admin password: %v", err)
@@ -56,9 +58,28 @@ func main() {
 	}
 	log.Printf("seeded admin user %q", cfg.SeedAdminUser)
 
+	alertEngine := alert.New(st, cfg.PublicBaseURL, cfg.AllowLocalWebhooks)
+
+	var provider metrics.MetricsProvider
+	if cfg.SignozURL != "" && cfg.SignozAPIKey != "" {
+		provider = metrics.NewSignoz(cfg.SignozURL, cfg.SignozAPIKey)
+		log.Printf("signoz metrics provider configured (%s)", cfg.SignozURL)
+	} else {
+		log.Print("SIGNOZ_URL / SIGNOZ_API_KEY unset — analyzer will fail jobs until configured")
+	}
+
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+	worker := analyzer.New(st, provider, alertEngine, cfg.AnalyzerPoll)
+	go worker.Run(workerCtx)
+
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           api.New(st, cfg.SessionSecret),
+		Addr: ":" + cfg.Port,
+		Handler: api.New(st, api.Options{
+			SessionSecret: cfg.SessionSecret,
+			ClockSkewMax:  cfg.ClockSkewMax,
+			Alerts:        alertEngine,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -69,11 +90,11 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown on SIGINT/SIGTERM (so k8s rollouts drain cleanly).
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Print("shutting down")
+	workerCancel()
 
 	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -82,8 +103,6 @@ func main() {
 	}
 }
 
-// mustConnect retries because Postgres in the same compose/Helm release may not
-// be accepting connections yet when the backend boots.
 func mustConnect(url string) *store.Store {
 	var (
 		st  *store.Store

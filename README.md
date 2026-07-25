@@ -1,136 +1,117 @@
 # wardn
 
 **Did that deploy make things worse?** wardn is deploy-aware observability: it
-detects when a new version goes live and compares the metrics that matter from
-before and after.
+detects when a new version goes live, compares SigNoz metrics before/after, and
+can alert Slack or a webhook when things regress.
 
-This repo currently holds the **walking skeleton** — a thin end-to-end slice that
-everything else is built on. See [`docs/design-doc.md`](docs/design-doc.md) for the
-full design and [`docs/plan.md`](docs/plan.md) for the staged build plan.
-
----
-
-## What the skeleton does
-
-```
-  ┌────────────┐   POST /api/v1/metrics    ┌────────────┐        ┌────────────┐
-  │ sample-app │ ────(Bearer API key)────► │  backend   │ ─────► │  Postgres  │
-  │ (emitter)  │      latency_ms sample     │   (Go)     │  SQL   │            │
-  └────────────┘                            └────────────┘        └────────────┘
-                                                  ▲
-                          GET /api/v1/metrics      │  (read series)
-  ┌────────────┐   /api proxied by nginx           │
-  │  frontend  │ ──────────────────────────────────┘
-  │  (React)   │   live latency dashboard
-  └────────────┘
-```
-
-- **sample-app** — stands in for a real service. Every few seconds it POSTs a
-  synthetic `latency_ms` sample tagged with its `APP_VERSION`, authenticated with an
-  API key from a mounted Secret. Set `REGRESSED=true` to simulate a bad deploy.
-- **backend** (Go + **Gin**, at the repo root) — ingests metrics (API-key auth, scoped
-  per app), stores them per-version in Postgres, serves them back, and computes
-  p50/p90/p95/p99 **per version**. Handles **login** (username/password → cookie session,
-  bcrypt-hashed). Seeds an app + key, an admin user, and synthetic multi-version history
-  on first boot.
-- **Postgres** — the only datastore. Holds `apps`, `users`, and `metrics` (each sample
-  carries a `version`).
-- **frontend** (React + Vite) — a **login screen**, then the dashboard, styled from the
-  *Wardn Dashboards* design: a **version-comparison chart** (one clickable point per
-  version, regressions in red), percentile tiles, and a per-version latency drill-down.
-  nginx serves it and proxies `/api`.
-
-**Login:** the dashboard requires a sign-in. A dev admin is seeded on first boot —
-**`admin` / `admin@12345`** (override with `SEED_ADMIN_USER` / `SEED_ADMIN_PASS`). Later,
-the real Helm chart will set the initial admin by exec-ing into the pod.
-
-> This is deliberately the smallest thing that works. SigNoz, the analyzer, the AI
-> layer, auth/RBAC, alerting — all come in the later stages in `docs/plan.md`.
+See [`docs/design-doc.md`](docs/design-doc.md) for the full design and
+[`docs/plan.md`](docs/plan.md) for the staged build plan.
 
 ---
 
-## Run it — fast path (Docker Compose, no Kubernetes)
+## What works today
 
-Best for iterating on code.
+```
+  CI / ArgoCD ──POST /api/v1/deployments──► Marker ──► analysis_jobs
+                                                      │
+  sample-app ──OTLP──► SigNoz ◄──PromQL── Analyzer ◄──┘
+                         │                   │
+                         │                   └── regressed? ──► Slack / webhook
+  sample-app ──POST /metrics──► Postgres ◄── Dashboard (latency by version)
+```
+
+- **Marker API** — `POST /api/v1/deployments` (per-app API key). CI curl recipe and
+  ArgoCD Notifications ConfigMap live under [`deploy/recipes/`](deploy/recipes/).
+- **Analyzer** — in-process worker waits for the after-window, queries SigNoz
+  (`POST /api/v5/query_range` PromQL), writes snapshots, sets deploy status.
+- **Alerting** — Slack + generic webhook; UI under **Alerting**; fires on `regressed`.
+- **Deploys page** — list + before/after snapshot cards.
+- **Existing dashboard** — latency-by-version from Postgres ingest (unchanged).
+- **sample-app** — still posts to wardn; optionally exports OTLP gauges to SigNoz
+  when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+
+**Login:** seeded admin **`admin` / `admin@12345`**.
+
+---
+
+## Run it — Docker Compose
 
 ```bash
-docker compose up --build          # build + start all four components
-open http://localhost:8088         # the dashboard (live within a few seconds)
-docker compose down -v             # stop everything and wipe the db volume
+# Optional SigNoz for the analyzer loop:
+export SIGNOZ_URL=https://your-signoz
+export SIGNOZ_API_KEY=...
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://your-otel-http   # no /v1/metrics suffix
+
+docker compose up --build
+open http://localhost:8088
+
+# Fire a deploy marker (analysis runs after window_seconds, default 120s):
+./demo/deploy-marker.sh v1.0.11
 ```
 
-## Run it — the real thing (kind + Helm)
+Without `SIGNOZ_*`, marker + Deploys/Alerting UI still work; analyzer jobs fail
+until SigNoz is configured.
 
-Best for exercising the deployment path.
+## Run it — kind + Helm
 
 ```bash
-./deploy/kind/setup.sh             # kind cluster → build images → load → helm install
-open http://localhost:8088         # dashboard (via the kind NodePort mapping)
-
-./deploy/kind/regress.sh on        # simulate a bad deploy — watch the latency line climb
-./deploy/kind/regress.sh off       # back to healthy
-./deploy/kind/teardown.sh          # delete the cluster
+./deploy/kind/setup.sh
+# Pass SigNoz via values, e.g.:
+#   helm upgrade wardn ./deploy/helm/wardn --set backend.signozUrl=... --set backend.signozApiKey=...
 ```
 
-Prereqs for this path: `docker`, `kind`, `kubectl`, `helm`.
+## CI / ArgoCD integration
 
----
+- **CI:** [`deploy/recipes/ci-marker.sh`](deploy/recipes/ci-marker.sh) — curl after
+  your health check succeeds.
+- **ArgoCD:** [`deploy/recipes/argocd-notifications-cm.yaml`](deploy/recipes/argocd-notifications-cm.yaml)
+  — webhook on `Succeeded` + `Healthy`, `oncePer` sync revision. Put the API key in
+  `argocd-notifications-secret` as `wardn-api-key`.
 
-## The regression demo
-
-The whole point in one gesture:
-
-- **Compose:** set `REGRESSED: "true"` on `wardn-sample-app` in `docker-compose.yml`,
-  then `docker compose up -d --build wardn-sample-app`.
-- **kind/Helm:** `./deploy/kind/regress.sh on`.
-
-Either way the emitter starts adding ~140ms to every sample, and the dashboard's
-latency line visibly jumps. That's the "did this deploy make it worse?" moment the
-whole product is built around.
-
----
-
-## API (skeleton)
+## API
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `GET`  | `/healthz` | — | liveness |
-| `POST` | `/api/v1/auth/login` | — | `{username, password}` → sets session cookie |
-| `POST` | `/api/v1/auth/logout` | session | clear the session |
-| `GET`  | `/api/v1/auth/me` | session | current user (401 if not signed in) |
-| `POST` | `/api/v1/metrics` | `Bearer <api-key>` | ingest one sample `{app, metric, version, value, timestamp?}` |
-| `GET`  | `/api/v1/versions?app=&metric=` | session | per-version percentiles (p50/p90/p95/p99) — the version chart |
-| `GET`  | `/api/v1/metrics?app=&version=&metric=` | session | raw samples for one version — the drill-down |
-| `GET`  | `/api/v1/apps` | session | list registered apps |
+| `POST` | `/api/v1/auth/login` | — | session cookie |
+| `POST` | `/api/v1/auth/logout` | session | |
+| `GET`  | `/api/v1/auth/me` | session | |
+| `POST` | `/api/v1/metrics` | API key | ingest sample (dashboard) |
+| `POST` | `/api/v1/deployments` | API key | deploy marker |
+| `GET`  | `/api/v1/deploys?app=` | session | list deploys |
+| `GET`  | `/api/v1/deploys/:id` | session | deploy + snapshots |
+| `GET`  | `/api/v1/apps` | session | list apps |
+| `GET`  | `/api/v1/versions` / `/metrics` | session | latency dashboard |
+| `GET/POST` | `/api/v1/apps/:id/alerts` | session | alert configs |
+| `PATCH/DELETE` | `/api/v1/alerts/:id` | session | |
+| `POST` | `/api/v1/alerts/:id/test` | session | send test notification |
 
-Two auth models: dashboard reads need a **login session** (a human in a browser); ingest
-needs a **per-app API key** (a service). Ingest stays key-gated regardless of login.
+## Configuration
 
-Read endpoints are open for now — the dashboard is unauthenticated until the
-auth/RBAC stage. Ingest is always key-gated and scoped to the key's app.
+| Env | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres |
+| `SIGNOZ_URL` / `SIGNOZ_API_KEY` | Analyzer queries |
+| `SIGNOZ_UI_URL` | Optional deep links |
+| `PUBLIC_BASE_URL` | Links in Slack messages |
+| `ALLOW_LOCAL_WEBHOOKS` | Allow localhost webhook URLs (dev default true) |
+| `ANALYZER_POLL_INTERVAL` | Job claim interval (default `5s`) |
+| `CLOCK_SKEW_MAX` | Marker timestamp tolerance (default `24h`) |
+| `SEED_APP` / `SEED_API_KEY` | Seeded app + key |
 
----
+Demo PromQL templates query `wardn_demo_latency_ms` / `wardn_demo_error_rate`
+(from sample-app OTLP). Swap `metric_definitions.promql_template` for real APM
+queries in production.
 
 ## Layout
 
 ```
-main.go           Go backend entrypoint (the backend is the repo root)
-config/ store/    backend packages: config + Postgres storage
-api/              backend package: HTTP API
-Dockerfile        backend image (build context = repo root)
-frontend/         React + Vite dashboard (components/, styles.css) + nginx
-demo/             demo scaffolding (fake data for the skeleton)
-  seed/           historical backfill — run in-process by the backend
-  sample-app/     live metric emitter (its own module)
-deploy/
-  helm/wardn/     Helm chart: backend, frontend, postgres, sample-app
-  kind/           kind config + setup.sh / regress.sh / teardown.sh
-docker-compose.yml  fast local loop (mirrors the chart)
-docs/             design-doc.md, plan.md, todo.md
+main.go api/ store/ config/   backend
+metrics/ analyzer/ alert/     SigNoz client, worker, notifiers
+frontend/                     Dashboards + Deploys + Alerting
+demo/sample-app/              emitter (+ optional OTLP)
+demo/deploy-marker.sh         fire a marker locally
+deploy/recipes/               CI curl + ArgoCD Notifications
+deploy/helm/ deploy/kind/
+docs/
 ```
-
-## Configuration
-
-Defaults live in [`deploy/helm/wardn/values.yaml`](deploy/helm/wardn/values.yaml)
-(Helm) and `docker-compose.yml` (Compose). The seeded app is `checkout-service`
-with key `wardn_dev_key_checkout` — fine for local dev, swap before anything real.
