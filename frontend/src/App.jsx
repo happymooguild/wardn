@@ -8,6 +8,21 @@ import { fetchApps, fetchVersions, fetchVersionSeries, me, logout } from './api.
 
 const POLL_MS = 5000
 
+const RANGES = [
+  ['1d', 'Last 1 day'],
+  ['2d', 'Last 2 days'],
+  ['3d', 'Last 3 days'],
+  ['5d', 'Last 5 days'],
+  ['1w', 'Last 1 week'],
+  ['2w', 'Last 2 weeks'],
+  ['1mo', 'Last 1 month'],
+  ['2mo', 'Last 2 months'],
+  ['3mo', 'Last 3 months'],
+  ['1y', 'Last 1 year'],
+  ['2y', 'Last 2 years'],
+  ['all', 'All time'],
+]
+
 export default function App() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
@@ -17,6 +32,7 @@ export default function App() {
   const [versions, setVersions] = useState([])
   const [selected, setSelected] = useState('')
   const [detail, setDetail] = useState([])
+  const [range, setRange] = useState('1d')
   const [error, setError] = useState('')
 
   const selectedRef = useRef('')
@@ -49,17 +65,24 @@ export default function App() {
       .catch(onAuthError)
   }, [user])
 
-  // Poll per-version stats for the selected app.
+  // Poll per-version stats for the selected app + time range.
   useEffect(() => {
     if (!user || !app) return
     let alive = true
     const load = async () => {
       try {
-        const vs = await fetchVersions(app)
+        const vs = await fetchVersions(app, range)
         if (!alive) return
         setVersions(vs)
         setError('')
-        if (!selectedRef.current && vs.length) setSelected(vs[vs.length - 1].version)
+        // Default to (or fall back to) the latest in-range version when the
+        // current selection is empty or has dropped out of the window.
+        const names = vs.map((v) => v.version)
+        if (vs.length === 0) {
+          setSelected('')
+        } else if (!selectedRef.current || !names.includes(selectedRef.current)) {
+          setSelected(vs[vs.length - 1].version)
+        }
       } catch (e) {
         if (alive) onAuthError(e)
       }
@@ -70,15 +93,15 @@ export default function App() {
       alive = false
       clearInterval(id)
     }
-  }, [user, app])
+  }, [user, app, range])
 
-  // Poll raw samples for the selected version.
+  // Poll raw samples for the selected version, within the time range.
   useEffect(() => {
     if (!user || !app || !selected) return
     let alive = true
     const load = async () => {
       try {
-        const pts = await fetchVersionSeries(app, selected)
+        const pts = await fetchVersionSeries(app, selected, range)
         if (alive) setDetail(pts)
       } catch (e) {
         if (alive) onAuthError(e)
@@ -90,7 +113,7 @@ export default function App() {
       alive = false
       clearInterval(id)
     }
-  }, [user, app, selected])
+  }, [user, app, selected, range])
 
   const selIdx = useMemo(() => versions.findIndex((v) => v.version === selected), [versions, selected])
   const selVer = selIdx >= 0 ? versions[selIdx] : null
@@ -129,23 +152,34 @@ export default function App() {
           <div className="crumbs">
             <span>Home</span>
             <span className="sep">/</span>
-            <span>Dashboards</span>
-            <span className="sep">/</span>
-            <span className="here">Latency by version</span>
+            <span className="here">Dashboards</span>
           </div>
-          <div className="header-controls">
-            <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
-              {apps.length === 0 && <option value="">no apps</option>}
-              {apps.map((a) => (
-                <option key={a.id} value={a.name}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <span className="pill live">
-              <span className="dot" />
-              live
-            </span>
+          <div className="header-main">
+            <div className="header-title">
+              <h1>Latency by version</h1>
+              <span className="header-sub">p99 across every deploy{app ? ` · ${app}` : ''}</span>
+            </div>
+            <div className="header-controls">
+              <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
+                {apps.length === 0 && <option value="">no apps</option>}
+                {apps.map((a) => (
+                  <option key={a.id} value={a.name}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <select className="pill" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Time range">
+                {RANGES.map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <span className="pill live">
+                <span className="dot" />
+                live
+              </span>
+            </div>
           </div>
         </header>
 

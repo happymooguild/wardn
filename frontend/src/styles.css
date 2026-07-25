@@ -226,16 +226,33 @@ body {
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 28px;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
   gap: 16px;
+  padding: 16px 28px 22px;
+  border-bottom: 1px solid var(--line);
 }
 .crumbs { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); }
 .crumbs .sep { color: #3a4150; }
 .crumbs .here { color: var(--text-code); }
-.header-controls { display: flex; align-items: center; gap: 10px; }
+.header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.header-title h1 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: -0.01em;
+  margin: 0 0 3px;
+}
+.header-sub { font-size: 13px; color: var(--text-dim); }
+.header-controls { display: flex; align-items: center; gap: 12px; }
+.header-controls .pill { padding: 10px 16px; font-size: 14px; border-radius: 9px; }
+.header-controls select.pill { padding-right: 34px; background-position: right 12px center; }
 
 .pill {
   display: flex;
@@ -264,7 +281,17 @@ body {
   70% { box-shadow: 0 0 0 6px rgba(99, 211, 151, 0); }
   100% { box-shadow: 0 0 0 0 rgba(99, 211, 151, 0); }
 }
-select.pill { appearance: none; padding-right: 26px; }
+select.pill {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  /* custom chevron so it reads as a dropdown (native arrow is stripped) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%239aa1ab' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+select.pill:hover { border-color: var(--border-hover); }
 
 .content { flex: 1; overflow: auto; padding: 24px 28px; }
 .content-inner { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
