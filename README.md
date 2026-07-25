@@ -36,9 +36,9 @@ full design and [`docs/plan.md`](docs/plan.md) for the staged build plan.
 - **Postgres** — the only datastore. Holds `apps`, `users`, and `metrics` (each sample
   carries a `version`).
 - **frontend** (React + Vite) — a **login screen**, then the dashboard, styled from the
-  *Wardn Dashboards* design: a **version-comparison chart** (one clickable point per
-  version, regressions in red), percentile tiles, and a per-version latency drill-down.
-  nginx serves it and proxies `/api`.
+  *Wardn Dashboards* design: a **time-range selector** (Last 1 day … All time), a
+  **version-comparison chart** (one clickable point per version, regressions in red),
+  percentile tiles, and a per-version latency drill-down. nginx serves it and proxies `/api`.
 
 **Login:** the dashboard requires a sign-in. A dev admin is seeded on first boot —
 **`admin` / `admin@12345`** (override with `SEED_ADMIN_USER` / `SEED_ADMIN_PASS`). Later,

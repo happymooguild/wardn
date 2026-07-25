@@ -40,16 +40,16 @@ export async function fetchApps() {
   return data.apps ?? []
 }
 
-export async function fetchVersions(app, metric = 'latency_ms') {
-  const params = new URLSearchParams({ app, metric })
+export async function fetchVersions(app, range = '1d', metric = 'latency_ms') {
+  const params = new URLSearchParams({ app, metric, range })
   const res = await fetch(`/api/v1/versions?${params}`, opts)
   if (!res.ok) throw new Error(`versions: ${res.status}`)
   const data = await res.json()
   return data.versions ?? []
 }
 
-export async function fetchVersionSeries(app, version, metric = 'latency_ms') {
-  const params = new URLSearchParams({ app, version, metric })
+export async function fetchVersionSeries(app, version, range = '1d', metric = 'latency_ms') {
+  const params = new URLSearchParams({ app, version, metric, range })
   const res = await fetch(`/api/v1/metrics?${params}`, opts)
   if (!res.ok) throw new Error(`series: ${res.status}`)
   const data = await res.json()

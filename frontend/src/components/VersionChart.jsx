@@ -13,6 +13,12 @@ const PADR = 18
 const PADT = 18
 const PADB = 50
 
+// Release time = when the version's first sample landed, shown in UTC (…Z).
+function fmtReleaseUTC(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toISOString().slice(0, 19).replace('T', ' ') + 'Z'
+}
+
 export default function VersionChart({ versions, selected, onSelect, series = 'p99' }) {
   const wrapRef = useRef(null)
   const [hover, setHover] = useState(null) // { idx, left, top }
@@ -125,6 +131,7 @@ export default function VersionChart({ versions, selected, onSelect, series = 'p
           <div className="vtip-v">{versions[hover.idx].version}</div>
           <div className="vtip-r"><span>p99</span><b>{Math.round(versions[hover.idx].p99)}ms</b></div>
           <div className="vtip-r"><span>p50</span><b>{Math.round(versions[hover.idx].p50)}ms</b></div>
+          <div className="vtip-r"><span>released</span><b>{fmtReleaseUTC(versions[hover.idx].first_ts)}</b></div>
           <div className="vtip-hint">click to inspect →</div>
         </div>
       )}

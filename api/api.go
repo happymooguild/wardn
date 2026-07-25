@@ -237,8 +237,9 @@ func (a *API) versions(c *gin.Context) {
 		return
 	}
 	metric := c.DefaultQuery("metric", "latency_ms")
+	since := rangeSince(c.DefaultQuery("range", "1d"))
 
-	stats, err := a.st.VersionsWithStats(c, app, metric)
+	stats, err := a.st.VersionsWithStats(c, app, metric, since)
 	if err != nil {
 		log.Printf("versions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read versions"})
@@ -255,8 +256,9 @@ func (a *API) series(c *gin.Context) {
 		return
 	}
 	metric := c.DefaultQuery("metric", "latency_ms")
+	since := rangeSince(c.DefaultQuery("range", "1d"))
 
-	points, err := a.st.VersionSeries(c, app, metric, version)
+	points, err := a.st.VersionSeries(c, app, metric, version, since)
 	if err != nil {
 		log.Printf("series: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not read series"})
@@ -277,6 +279,42 @@ func (a *API) apps(c *gin.Context) {
 
 func (a *API) health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// rangeSince maps a dashboard time-range key to a lower-bound timestamp.
+// "all" returns the zero time (no lower bound). Months/years are approximated
+// (30d / 365d), which is plenty for a range selector.
+func rangeSince(key string) time.Time {
+	now := time.Now()
+	day := 24 * time.Hour
+	switch key {
+	case "1d":
+		return now.Add(-1 * day)
+	case "2d":
+		return now.Add(-2 * day)
+	case "3d":
+		return now.Add(-3 * day)
+	case "5d":
+		return now.Add(-5 * day)
+	case "1w":
+		return now.Add(-7 * day)
+	case "2w":
+		return now.Add(-14 * day)
+	case "1mo":
+		return now.Add(-30 * day)
+	case "2mo":
+		return now.Add(-60 * day)
+	case "3mo":
+		return now.Add(-90 * day)
+	case "1y":
+		return now.Add(-365 * day)
+	case "2y":
+		return now.Add(-730 * day)
+	case "all":
+		return time.Time{}
+	default:
+		return now.Add(-1 * day)
+	}
 }
 
 // bearer extracts the token from an "Authorization: Bearer <token>" header.
