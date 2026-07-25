@@ -182,6 +182,7 @@ type AlertConfig struct {
 	ChannelType   string          `json:"channel_type"`
 	ChannelConfig json.RawMessage `json:"channel_config"`
 	OnVerdict     string          `json:"on_verdict"`
+	ThresholdPct  *float64        `json:"threshold_pct,omitempty"`
 	Enabled       bool            `json:"enabled"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
@@ -317,6 +318,8 @@ CREATE TABLE IF NOT EXISTS alert_configs (
     enabled        BOOLEAN NOT NULL DEFAULT true,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE alert_configs ADD COLUMN IF NOT EXISTS threshold_pct DOUBLE PRECISION;
 
 CREATE TABLE IF NOT EXISTS alert_deliveries (
     id              BIGSERIAL PRIMARY KEY,

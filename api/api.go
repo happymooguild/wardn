@@ -88,6 +88,7 @@ func New(st *store.Store, opts Options) http.Handler {
 			authed.GET("/metrics", a.series)
 			authed.GET("/apps", a.apps)
 			authed.POST("/apps", a.createApp)
+			authed.GET("/metric-definitions", a.listMetricDefinitions)
 			authed.GET("/deploys", a.listDeploys)
 			authed.GET("/deploys/:id", a.getDeploy)
 			authed.GET("/apps/:id/alerts", a.listAlerts)
@@ -446,6 +447,15 @@ func (a *API) apps(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"apps": apps})
 }
 
+func (a *API) listMetricDefinitions(c *gin.Context) {
+	list, err := a.st.ListMetricDefinitions(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not list metrics"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"metrics": list})
+}
+
 func (a *API) listDeploys(c *gin.Context) {
 	appName := c.Query("app")
 	if appName == "" {
@@ -498,6 +508,7 @@ type alertReq struct {
 	ChannelType   string          `json:"channel_type"`
 	ChannelConfig json.RawMessage `json:"channel_config"`
 	OnVerdict     string          `json:"on_verdict"`
+	ThresholdPct  *float64        `json:"threshold_pct"`
 	Enabled       *bool           `json:"enabled"`
 }
 
@@ -545,7 +556,7 @@ func (a *API) createAlert(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
-	cfg, err := a.st.CreateAlertConfig(c, appID, req.MetricKey, req.ChannelType, req.ChannelConfig, req.OnVerdict, enabled)
+	cfg, err := a.st.CreateAlertConfig(c, appID, req.MetricKey, req.ChannelType, req.ChannelConfig, req.OnVerdict, req.ThresholdPct, enabled)
 	if err != nil {
 		log.Printf("create alert: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create alert"})
@@ -594,7 +605,11 @@ func (a *API) updateAlert(c *gin.Context) {
 	if req.MetricKey != nil {
 		metricKey = req.MetricKey
 	}
-	cfg, err := a.st.UpdateAlertConfig(c, id, metricKey, channelType, cfgJSON, onVerdict, enabled)
+	thresholdPct := existing.ThresholdPct
+	if req.ThresholdPct != nil {
+		thresholdPct = req.ThresholdPct
+	}
+	cfg, err := a.st.UpdateAlertConfig(c, id, metricKey, channelType, cfgJSON, onVerdict, thresholdPct, enabled)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update alert"})
 		return
