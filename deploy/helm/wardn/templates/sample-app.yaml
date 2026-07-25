@@ -1,5 +1,6 @@
 {{- if .Values.sampleApp.enabled }}
 {{- range .Values.app.services }}
+{{- if or (not (hasKey . "deploySampleApp")) .deploySampleApp }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,5 +48,6 @@ spec:
               value: {{ $.Values.sampleApp.regressionAddMs | quote }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: {{ $.Values.sampleApp.otlpEndpoint | quote }}
+{{- end }}
 {{- end }}
 {{- end }}
