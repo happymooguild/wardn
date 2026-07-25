@@ -1,6 +1,6 @@
-// The left rail. Dashboards / Deploys / Alerting are wired; Home/Explore/Admin stay decorative.
+// The left rail. Admin stays decorative until RBAC lands.
 
-const Icon = {
+export const Icon = {
   home: (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
       <path d="M3 9L10 3L17 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -49,12 +49,12 @@ const Icon = {
 }
 
 const ITEMS = [
-  { icon: 'home', label: 'Home', page: null },
+  { icon: 'home', label: 'Home', page: 'home' },
   { icon: 'grid', label: 'Dashboards', page: 'dashboards' },
   { icon: 'deploys', label: 'Deploys', page: 'deploys' },
   { icon: 'alert', label: 'Alerting', page: 'alerting' },
   { icon: 'ai', label: 'AI Settings', page: 'ai' },
-  { icon: 'explore', label: 'Explore', page: null },
+  { icon: 'explore', label: 'Explore', page: 'explore' },
 ]
 
 export default function Sidebar({ user, page, onNavigate, onLogout }) {

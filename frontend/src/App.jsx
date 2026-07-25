@@ -6,6 +6,8 @@ import Login from './components/Login.jsx'
 import Deploys from './components/Deploys.jsx'
 import Alerting from './components/Alerting.jsx'
 import AISettings from './components/AISettings.jsx'
+import Home from './components/Home.jsx'
+import Explore from './components/Explore.jsx'
 import { fetchApps, fetchVersions, me, logout } from './api.js'
 
 const POLL_MS = 5000
@@ -26,16 +28,18 @@ const RANGES = [
 ]
 
 const PAGE_META = {
+  home: { title: 'Home', sub: 'what wardn can do, and how your apps are doing right now' },
   dashboards: { title: 'Latency by version', sub: 'latency percentiles across every deploy' },
   deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
   alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
   ai: { title: 'AI Settings', sub: 'provider credentials and automatic root-cause analysis' },
+  explore: { title: 'Explore', sub: 'everything wardn can do, in one place' },
 }
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
-  const [page, setPage] = useState('dashboards')
+  const [page, setPage] = useState('home')
 
   const [apps, setApps] = useState([])
   const [app, setApp] = useState('')
@@ -145,8 +149,12 @@ export default function App() {
         <header className="header">
           <div className="crumbs">
             <span>Home</span>
-            <span className="sep">/</span>
-            <span className="here">{meta.title}</span>
+            {page !== 'home' && (
+              <>
+                <span className="sep">/</span>
+                <span className="here">{meta.title}</span>
+              </>
+            )}
           </div>
           <div className="header-main">
             <div className="header-title">
@@ -154,7 +162,7 @@ export default function App() {
               <span className="header-sub">{sub}</span>
             </div>
             <div className="header-controls">
-              {page !== 'ai' && page !== 'alerting' && page !== 'deploys' && (
+              {page !== 'ai' && page !== 'home' && page !== 'explore' && page !== 'deploys' && page !== 'alerting' && (
                 <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
                   {apps.length === 0 && <option value="">no apps</option>}
                   {apps.map((a) => (
@@ -184,11 +192,13 @@ export default function App() {
         </header>
 
         <div className="content">
+          {page === 'home' && <Home apps={apps} onNavigate={setPage} onAuthError={onAuthError} />}
           {page === 'deploys' && (
             <Deploys apps={apps} onAuthError={onAuthError} onAppCreated={() => loadApps()} />
           )}
           {page === 'alerting' && <Alerting apps={apps} onAuthError={onAuthError} />}
           {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
+          {page === 'explore' && <Explore onNavigate={setPage} />}
           {page === 'dashboards' && (
             <div className="content-inner fade-in">
               <div className="section-label">
