@@ -93,6 +93,7 @@ func New(st *store.Store, opts Options) http.Handler {
 			authed.GET("/dashboards", a.listDashboards)
 			authed.POST("/dashboards", a.createDashboard)
 			authed.DELETE("/dashboards/:id", a.deleteDashboard)
+			authed.GET("/signoz/metrics", a.availableMetrics)
 			authed.GET("/apps", a.apps)
 			authed.POST("/apps", a.createApp)
 			authed.GET("/metric-definitions", a.listMetricDefinitions)

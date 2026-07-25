@@ -383,27 +383,28 @@ CREATE INDEX IF NOT EXISTS analyses_deploy ON analyses (deploy_event_id, created
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_ts      ON metrics (app_id, name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_metrics_app_name_version ON metrics (app_id, name, version);
 
+-- Verdict metrics: compared before/after a deploy, version-filtered so the new
+-- version's window isn't polluted by the previous version's stale series.
+-- (Demo gauges from the sample-app; swap for real APM PromQL in production.)
 INSERT INTO metric_definitions (key, name, description, promql_template, unit, higher_is_worse)
 VALUES
-  (
-    'latency_p99',
-    'Latency p99',
-    'Demo latency gauge from sample-app OTLP (swap for real APM PromQL in production)',
-    'avg(wardn_demo_latency_ms{service_name="{{service}}"})',
-    'ms',
-    true
-  ),
-  (
-    'error_rate',
-    'Error rate',
-    'Demo error-rate gauge from sample-app OTLP (swap for real APM PromQL in production)',
-    'avg(wardn_demo_error_rate{service_name="{{service}}"})',
-    'percent',
-    true
-  )
+  ('latency_p99', 'Latency p99', 'Response time (higher is worse)',
+   'avg(wardn_demo_latency_ms{service_name="{{service}}",version="{{version}}"})', 'ms', true),
+  ('error_rate', 'Error rate', 'Error percentage (higher is worse)',
+   'avg(wardn_demo_error_rate{service_name="{{service}}",version="{{version}}"})', 'percent', true),
+  ('cpu', 'CPU', 'CPU utilisation (higher is worse)',
+   'avg(wardn_demo_cpu_pct{service_name="{{service}}",version="{{version}}"})', 'percent', true),
+  ('memory', 'Memory', 'Memory footprint (higher is worse)',
+   'avg(wardn_demo_mem_mb{service_name="{{service}}",version="{{version}}"})', 'MB', true)
 ON CONFLICT (key) DO UPDATE SET
   promql_template = EXCLUDED.promql_template,
   description = EXCLUDED.description;
+
+-- Enable every verdict metric for every existing app (new apps get them seeded).
+INSERT INTO app_metrics (app_id, metric_key, enabled)
+SELECT a.id, m.key, true
+  FROM apps a CROSS JOIN (VALUES ('latency_p99'),('error_rate'),('cpu'),('memory')) AS m(key)
+ON CONFLICT DO NOTHING;
 
 -- Per-version dashboards. Each maps a display to a SigNoz metric wardn pulls per
 -- version around every deploy marker. Built-ins are seeded; users add custom rows.
@@ -422,7 +423,9 @@ CREATE TABLE IF NOT EXISTS dashboards (
 INSERT INTO dashboards (name, metric_key, signoz_metric, kind, unit, decimals, builtin) VALUES
   ('Latency',    'latency_ms',  'wardn_demo_latency_ms', 'percentiles', 'ms',      0, true),
   ('Error rate', 'error_rate',  'wardn_demo_error_rate', 'single',      '%',       2, true),
-  ('Throughput', 'throughput',  'wardn_demo_rps',        'single',      ' req/s',  0, true)
+  ('Throughput', 'throughput',  'wardn_demo_rps',        'single',      ' req/s',  0, true),
+  ('CPU',        'cpu_pct',     'wardn_demo_cpu_pct',    'single',      '%',       1, true),
+  ('Memory',     'mem_mb',      'wardn_demo_mem_mb',     'single',      ' MB',     0, true)
 ON CONFLICT (metric_key) DO NOTHING;
 `
 
@@ -480,7 +483,7 @@ func (s *Store) SeedApp(ctx context.Context, name, apiKeyHash string) (int64, er
 	}
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO app_metrics (app_id, metric_key, enabled) VALUES
-		 ($1, 'latency_p99', true), ($1, 'error_rate', true)
+		 ($1, 'latency_p99', true), ($1, 'error_rate', true), ($1, 'cpu', true), ($1, 'memory', true)
 		 ON CONFLICT DO NOTHING`, id)
 	return id, err
 }
@@ -503,7 +506,7 @@ func (s *Store) CreateApp(ctx context.Context, name, apiKeyHash string) (App, er
 	}
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO app_metrics (app_id, metric_key, enabled) VALUES
-		 ($1, 'latency_p99', true), ($1, 'error_rate', true)
+		 ($1, 'latency_p99', true), ($1, 'error_rate', true), ($1, 'cpu', true), ($1, 'memory', true)
 		 ON CONFLICT DO NOTHING`, id); err != nil {
 		return App{}, err
 	}

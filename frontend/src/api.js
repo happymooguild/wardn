@@ -73,6 +73,14 @@ export async function createDashboard(body) {
   return data
 }
 
+// Metrics SigNoz knows about, for the custom-dashboard picker.
+export async function fetchAvailableMetrics() {
+  const res = await fetch('/api/v1/signoz/metrics', opts)
+  if (!res.ok) throw new Error(`available metrics: ${res.status}`)
+  const data = await res.json()
+  return data.metrics ?? []
+}
+
 export async function deleteDashboard(id) {
   const res = await fetch(`/api/v1/dashboards/${id}`, { method: 'DELETE', credentials: 'include' })
   if (!res.ok) {

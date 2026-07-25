@@ -11,12 +11,31 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"wardn/metrics"
 	"wardn/store"
 )
 
 // backfillSettle mirrors the analyzer's after-window settle so a newly created
 // dashboard reads the same window the analyzer would have for each past deploy.
 const backfillSettle = 15 * time.Second
+
+// availableMetrics enumerates metrics from the backend (SigNoz) for the custom
+// dashboard picker. Returns an empty list (not an error) when discovery isn't
+// available, so the UI can still fall back to free-text entry.
+func (a *API) availableMetrics(c *gin.Context) {
+	lister, ok := a.metrics.(metrics.MetricLister)
+	if !ok || a.metrics == nil {
+		c.JSON(http.StatusOK, gin.H{"metrics": []any{}})
+		return
+	}
+	ms, err := lister.ListMetrics(c, strings.TrimSpace(c.Query("search")))
+	if err != nil {
+		log.Printf("available metrics: %v", err)
+		c.JSON(http.StatusOK, gin.H{"metrics": []any{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"metrics": ms})
+}
 
 func (a *API) listDashboards(c *gin.Context) {
 	ds, err := a.st.ListDashboards(c)

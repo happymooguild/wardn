@@ -188,14 +188,24 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 	beforeStart := T.Add(-window)
 	beforeEnd := T
 
+	// Version-filter the comparison: the after-window is this deploy's version,
+	// the before-window the previous version. Without this a prior version's
+	// stale (carried-forward) series bleeds into the after-window and skews the
+	// verdict. Marker version == emitted service version, so this lines up.
+	prevVersion := ""
+	if deploy.PreviousVersion != nil {
+		prevVersion = *deploy.PreviousVersion
+	}
+
 	anyDegraded := false
 	anyData := false
 	snapshots := make([]store.MetricSnapshot, 0, len(defs))
 
 	for _, def := range defs {
-		promql := renderTemplate(def.PromQLTemplate, app.SignozServiceName, app.Environment)
-		beforeSeries, errB := w.Metrics.Query(ctx, promql, beforeStart, beforeEnd)
-		afterSeries, errA := w.Metrics.Query(ctx, promql, afterStart, afterEnd)
+		afterPromql := renderTemplate(def.PromQLTemplate, app.SignozServiceName, app.Environment, deploy.Version)
+		beforePromql := renderTemplate(def.PromQLTemplate, app.SignozServiceName, app.Environment, prevVersion)
+		beforeSeries, errB := w.Metrics.Query(ctx, beforePromql, beforeStart, beforeEnd)
+		afterSeries, errA := w.Metrics.Query(ctx, afterPromql, afterStart, afterEnd)
 		if errB != nil {
 			return fmt.Errorf("query before %s: %w", def.Key, errB)
 		}
@@ -210,7 +220,7 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 			WindowBeforeEnd:   beforeEnd,
 			WindowAfterStart:  afterStart,
 			WindowAfterEnd:    afterEnd,
-			RawQuery:          promql,
+			RawQuery:          afterPromql,
 			SeriesBefore:      toSeriesPoints(metrics.Downsample(beforeSeries.Points, 120)),
 			SeriesAfter:       toSeriesPoints(metrics.Downsample(afterSeries.Points, 120)),
 		}
@@ -252,8 +262,13 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 					// so error_rate must clear the pp threshold, not the latency %.
 					degraded = (*afterVal - *beforeVal) >= app.ErrorRateThresholdPP
 				} else {
+					// latency, cpu, memory: a sufficient relative rise is a regression.
 					degraded = deltaPct >= app.LatencyThresholdPct
 				}
+			} else {
+				// lower-is-worse (e.g. throughput): a sufficient relative drop is a
+				// regression.
+				degraded = deltaPct <= -app.LatencyThresholdPct
 			}
 			sn.Degraded = degraded
 			if degraded {
@@ -326,9 +341,10 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 	return nil
 }
 
-func renderTemplate(tmpl, service, environment string) string {
+func renderTemplate(tmpl, service, environment, version string) string {
 	out := strings.ReplaceAll(tmpl, "{{service}}", service)
 	out = strings.ReplaceAll(out, "{{environment}}", environment)
+	out = strings.ReplaceAll(out, "{{version}}", version)
 	return out
 }
 

@@ -24,6 +24,19 @@ type MetricsProvider interface {
 	QuerySeries(ctx context.Context, promql string, start, end time.Time, stepSec int) (Series, error)
 }
 
+// MetricInfo describes an available metric discovered from the backend.
+type MetricInfo struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Unit string `json:"unit"`
+}
+
+// MetricLister is optionally implemented by a provider that can enumerate the
+// metric names it knows about (for the custom-dashboard metric picker).
+type MetricLister interface {
+	ListMetrics(ctx context.Context, search string) ([]MetricInfo, error)
+}
+
 // AverageScalar returns the mean of point values, or 0 if empty.
 func AverageScalar(points []Point) float64 {
 	if len(points) == 0 {

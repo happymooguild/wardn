@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { fetchAvailableMetrics } from '../api.js'
 
 // Create a custom dashboard: name it, point it at a SigNoz metric, pick how to
 // display it. On create the backend backfills recent deploys so it isn't empty.
@@ -11,6 +12,7 @@ export default function CreateDashboardModal({ existing, onClose, onCreate, onCr
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(null) // { dashboard, backfilled_versions }
+  const [available, setAvailable] = useState([]) // [{name,type,unit}]
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -18,12 +20,27 @@ export default function CreateDashboardModal({ existing, onClose, onCreate, onCr
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Suggest the metrics wardn already knows about (built-in sources + demo set).
-  const suggestions = useMemo(() => {
-    const s = new Set(['wardn_demo_latency_ms', 'wardn_demo_error_rate', 'wardn_demo_rps'])
-    for (const d of existing || []) if (d.signoz_metric) s.add(d.signoz_metric)
-    return [...s]
-  }, [existing])
+  // Discover metrics from SigNoz; fall back silently to just the known set.
+  useEffect(() => {
+    fetchAvailableMetrics().then(setAvailable).catch(() => setAvailable([]))
+  }, [])
+
+  // Metric options: discovered ∪ ones already used by existing dashboards.
+  const options = useMemo(() => {
+    const byName = new Map()
+    for (const m of available) if (m.name) byName.set(m.name, m)
+    for (const d of existing || []) if (d.signoz_metric && !byName.has(d.signoz_metric)) byName.set(d.signoz_metric, { name: d.signoz_metric, unit: d.unit })
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [available, existing])
+
+  // When a known metric is picked, prefill a sensible unit.
+  function pickMetric(v) {
+    setMetric(v)
+    const m = options.find((o) => o.name === v)
+    if (m && m.unit && (!unit || unit === '')) {
+      setUnit(m.unit === '1' ? '' : m.unit)
+    }
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -57,11 +74,13 @@ export default function CreateDashboardModal({ existing, onClose, onCreate, onCr
               <input className="text-input" autoFocus placeholder="e.g. Request rate" value={name}
                 onChange={(e) => setName(e.target.value)} spellCheck={false} />
 
-              <label className="field-label">SigNoz metric</label>
-              <input className="text-input" placeholder="e.g. wardn_demo_rps" value={metric} list="wardn-metric-suggestions"
-                onChange={(e) => setMetric(e.target.value)} spellCheck={false} />
+              <label className="field-label">
+                SigNoz metric {options.length > 0 && <span className="field-hint">· {options.length} discovered</span>}
+              </label>
+              <input className="text-input" placeholder="type or pick a metric…" value={metric} list="wardn-metric-suggestions"
+                onChange={(e) => pickMetric(e.target.value)} spellCheck={false} />
               <datalist id="wardn-metric-suggestions">
-                {suggestions.map((m) => <option key={m} value={m} />)}
+                {options.map((m) => <option key={m.name} value={m.name}>{m.type ? `${m.name} · ${m.type}` : m.name}</option>)}
               </datalist>
 
               <div className="field-row">

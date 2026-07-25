@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -109,6 +110,54 @@ func (p *SignozProvider) QuerySeries(ctx context.Context, promql string, start, 
 		return Series{}, err
 	}
 	return Series{Points: points, Scalar: AverageScalar(points)}, nil
+}
+
+// ListMetrics enumerates available metrics via GET /api/v2/metrics (last 24h),
+// optionally filtered by a search string.
+func (p *SignozProvider) ListMetrics(ctx context.Context, search string) ([]MetricInfo, error) {
+	if p.BaseURL == "" || p.APIKey == "" {
+		return nil, fmt.Errorf("signoz: URL or API key not configured")
+	}
+	now := time.Now().UTC()
+	q := url.Values{}
+	q.Set("start", fmt.Sprintf("%d", now.Add(-24*time.Hour).UnixMilli()))
+	q.Set("end", fmt.Sprintf("%d", now.UnixMilli()))
+	q.Set("limit", "500")
+	if search != "" {
+		q.Set("searchText", search)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.BaseURL+"/api/v2/metrics?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("SIGNOZ-API-KEY", p.APIKey)
+
+	res, err := p.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode >= 400 {
+		return nil, fmt.Errorf("signoz: HTTP %d: %s", res.StatusCode, truncate(string(body), 200))
+	}
+	var env struct {
+		Data struct {
+			Metrics []struct {
+				MetricName string `json:"metricName"`
+				Type       string `json:"type"`
+				Unit       string `json:"unit"`
+			} `json:"metrics"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("signoz: decode metrics list: %w", err)
+	}
+	out := make([]MetricInfo, 0, len(env.Data.Metrics))
+	for _, m := range env.Data.Metrics {
+		out = append(out, MetricInfo{Name: m.MetricName, Type: m.Type, Unit: m.Unit})
+	}
+	return out, nil
 }
 
 func truncate(s string, n int) string {

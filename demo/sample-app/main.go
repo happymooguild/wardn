@@ -37,6 +37,8 @@ func main() {
 		baseMS     = envFloat("BASE_LATENCY_MS", 60)
 		jitterMS   = envFloat("JITTER_MS", 12)
 		baseRPS    = envFloat("BASE_RPS", 120)
+		baseCPU    = envFloat("BASE_CPU_PCT", 30)
+		baseMem    = envFloat("BASE_MEM_MB", 256)
 		regressed  = envBool("REGRESSED", false)
 		regressAdd = envFloat("REGRESSION_ADD_MS", 140)
 		otlp       = strings.TrimRight(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"), "/")
@@ -81,6 +83,14 @@ func main() {
 		if regressed {
 			rps *= 0.7
 		}
+		// Saturation: CPU% and memory. A bad deploy burns more of both — the
+		// classic resource-regression signal alongside latency/errors.
+		cpu := baseCPU * (0.9 + rand.Float64()*0.2)
+		mem := baseMem * (0.95 + rand.Float64()*0.1)
+		if regressed {
+			cpu *= 2.2
+			mem *= 1.6
+		}
 
 		if pushWardn {
 			postWardn(client, base, apiKey, sample{
@@ -92,7 +102,7 @@ func main() {
 			})
 		}
 		if otlp != "" {
-			postOTLP(client, otlp, appName, appVer, value, errorRate, rps)
+			postOTLP(client, otlp, appName, appVer, value, errorRate, rps, cpu, mem)
 		}
 	}
 }
@@ -121,7 +131,7 @@ func postWardn(client *http.Client, base, apiKey string, s sample) {
 }
 
 // postOTLP sends OTLP/HTTP JSON gauges that SigNoz can scrape via PromQL.
-func postOTLP(client *http.Client, endpoint, service, version string, latencyMS, errorRate, rps float64) {
+func postOTLP(client *http.Client, endpoint, service, version string, latencyMS, errorRate, rps, cpu, mem float64) {
 	nowNano := time.Now().UnixNano()
 	payload := map[string]any{
 		"resourceMetrics": []any{
@@ -139,6 +149,8 @@ func postOTLP(client *http.Client, endpoint, service, version string, latencyMS,
 							gaugeMetric("wardn_demo_latency_ms", "ms", latencyMS, nowNano, service, version),
 							gaugeMetric("wardn_demo_error_rate", "1", errorRate, nowNano, service, version),
 							gaugeMetric("wardn_demo_rps", "1", rps, nowNano, service, version),
+							gaugeMetric("wardn_demo_cpu_pct", "1", cpu, nowNano, service, version),
+							gaugeMetric("wardn_demo_mem_mb", "MBy", mem, nowNano, service, version),
 						},
 					},
 				},
