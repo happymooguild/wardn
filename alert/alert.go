@@ -67,12 +67,28 @@ func (e *Engine) NotifyRegression(ctx context.Context, app store.App, deploy sto
 		if cfg.MetricKey != nil && *cfg.MetricKey != "" {
 			matched := false
 			for _, sn := range snapshots {
-				if sn.MetricKey == *cfg.MetricKey && sn.Degraded {
+				if sn.MetricKey != *cfg.MetricKey {
+					continue
+				}
+				if alertMetricMatches(cfg, sn) {
 					matched = true
 					break
 				}
 			}
 			if !matched {
+				continue
+			}
+		} else if cfg.ThresholdPct != nil {
+			// Any-metric alert with a custom threshold: fire only if some
+			// snapshot crosses that threshold (not merely app-level degraded).
+			ok := false
+			for _, sn := range snapshots {
+				if alertMetricMatches(cfg, sn) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
 				continue
 			}
 		}
@@ -253,4 +269,24 @@ func (e *Engine) validateURL(raw string) error {
 		return fmt.Errorf("private/link-local webhook URLs blocked")
 	}
 	return nil
+}
+
+// alertMetricMatches reports whether a snapshot should trigger this alert.
+// If the alert carries threshold_pct, that value wins over the analyzer's
+// degraded flag so suggested-alert edits are meaningful.
+func alertMetricMatches(cfg store.AlertConfig, sn store.MetricSnapshot) bool {
+	if cfg.ThresholdPct != nil {
+		// error_rate suggested alerts use percentage-points (absolute delta).
+		if sn.MetricKey == "error_rate" {
+			if sn.DeltaAbs == nil {
+				return false
+			}
+			return *sn.DeltaAbs >= *cfg.ThresholdPct
+		}
+		if sn.DeltaPct == nil {
+			return false
+		}
+		return *sn.DeltaPct >= *cfg.ThresholdPct
+	}
+	return sn.Degraded
 }

@@ -7,10 +7,11 @@ import (
 	"strings"
 )
 
+const alertSelectCols = `id, app_id, metric_key, channel_type, channel_config, on_verdict, threshold_pct, enabled, created_at`
+
 func (s *Store) ListAlertConfigs(ctx context.Context, appID int64) ([]AlertConfig, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, app_id, metric_key, channel_type, channel_config, on_verdict, enabled, created_at
-		   FROM alert_configs WHERE app_id = $1 ORDER BY id`, appID)
+		`SELECT `+alertSelectCols+` FROM alert_configs WHERE app_id = $1 ORDER BY id`, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -29,30 +30,30 @@ func (s *Store) ListAlertConfigs(ctx context.Context, appID int64) ([]AlertConfi
 
 func (s *Store) GetAlertConfig(ctx context.Context, id int64) (AlertConfig, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, app_id, metric_key, channel_type, channel_config, on_verdict, enabled, created_at
-		   FROM alert_configs WHERE id = $1`, id)
+		`SELECT `+alertSelectCols+` FROM alert_configs WHERE id = $1`, id)
 	return scanAlertConfig(row)
 }
 
-func (s *Store) CreateAlertConfig(ctx context.Context, appID int64, metricKey *string, channelType string, channelConfig json.RawMessage, onVerdict string, enabled bool) (AlertConfig, error) {
+func (s *Store) CreateAlertConfig(ctx context.Context, appID int64, metricKey *string, channelType string, channelConfig json.RawMessage, onVerdict string, thresholdPct *float64, enabled bool) (AlertConfig, error) {
 	if onVerdict == "" {
 		onVerdict = "regressed"
 	}
 	row := s.db.QueryRowContext(ctx,
-		`INSERT INTO alert_configs (app_id, metric_key, channel_type, channel_config, on_verdict, enabled)
-		 VALUES ($1,$2,$3,$4,$5,$6)
-		 RETURNING id, app_id, metric_key, channel_type, channel_config, on_verdict, enabled, created_at`,
-		appID, metricKey, channelType, channelConfig, onVerdict, enabled)
+		`INSERT INTO alert_configs (app_id, metric_key, channel_type, channel_config, on_verdict, threshold_pct, enabled)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)
+		 RETURNING `+alertSelectCols,
+		appID, metricKey, channelType, channelConfig, onVerdict, thresholdPct, enabled)
 	return scanAlertConfig(row)
 }
 
-func (s *Store) UpdateAlertConfig(ctx context.Context, id int64, metricKey *string, channelType string, channelConfig json.RawMessage, onVerdict string, enabled bool) (AlertConfig, error) {
+func (s *Store) UpdateAlertConfig(ctx context.Context, id int64, metricKey *string, channelType string, channelConfig json.RawMessage, onVerdict string, thresholdPct *float64, enabled bool) (AlertConfig, error) {
 	row := s.db.QueryRowContext(ctx,
 		`UPDATE alert_configs SET
-		   metric_key = $2, channel_type = $3, channel_config = $4, on_verdict = $5, enabled = $6
+		   metric_key = $2, channel_type = $3, channel_config = $4, on_verdict = $5,
+		   threshold_pct = $6, enabled = $7
 		 WHERE id = $1
-		 RETURNING id, app_id, metric_key, channel_type, channel_config, on_verdict, enabled, created_at`,
-		id, metricKey, channelType, channelConfig, onVerdict, enabled)
+		 RETURNING `+alertSelectCols,
+		id, metricKey, channelType, channelConfig, onVerdict, thresholdPct, enabled)
 	return scanAlertConfig(row)
 }
 
@@ -73,8 +74,7 @@ func (s *Store) DeleteAlertConfig(ctx context.Context, id int64) error {
 
 func (s *Store) ListEnabledAlertsForApp(ctx context.Context, appID int64) ([]AlertConfig, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, app_id, metric_key, channel_type, channel_config, on_verdict, enabled, created_at
-		   FROM alert_configs WHERE app_id = $1 AND enabled = true`, appID)
+		`SELECT `+alertSelectCols+` FROM alert_configs WHERE app_id = $1 AND enabled = true`, appID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,20 +91,24 @@ func (s *Store) ListEnabledAlertsForApp(ctx context.Context, appID int64) ([]Ale
 	return out, rows.Err()
 }
 
-// TryInsertDelivery returns true if this is the first delivery attempt for the pair.
-func (s *Store) TryInsertDelivery(ctx context.Context, alertConfigID, deployEventID int64, status string, responseCode *int, errMsg *string) (bool, error) {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO alert_deliveries (alert_config_id, deploy_event_id, status, response_code, error_message)
-		 VALUES ($1,$2,$3,$4,$5)`,
-		alertConfigID, deployEventID, status, responseCode, errMsg)
+func (s *Store) ListMetricDefinitions(ctx context.Context) ([]MetricDefinition, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT key, name, description, promql_template, unit, higher_is_worse
+		   FROM metric_definitions ORDER BY key`)
 	if err != nil {
-		// unique violation → already delivered
-		if isUniqueViolation(err) {
-			return false, nil
-		}
-		return false, err
+		return nil, err
 	}
-	return true, nil
+	defer rows.Close()
+
+	out := make([]MetricDefinition, 0)
+	for rows.Next() {
+		var m MetricDefinition
+		if err := rows.Scan(&m.Key, &m.Name, &m.Description, &m.PromQLTemplate, &m.Unit, &m.HigherIsWorse); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) DeliveryExists(ctx context.Context, alertConfigID, deployEventID int64) (bool, error) {
@@ -160,13 +164,18 @@ func scanAlertConfig(scanner interface {
 }) (AlertConfig, error) {
 	var c AlertConfig
 	var metricKey sql.NullString
+	var threshold sql.NullFloat64
 	var cfg []byte
-	err := scanner.Scan(&c.ID, &c.AppID, &metricKey, &c.ChannelType, &cfg, &c.OnVerdict, &c.Enabled, &c.CreatedAt)
+	err := scanner.Scan(&c.ID, &c.AppID, &metricKey, &c.ChannelType, &cfg, &c.OnVerdict, &threshold, &c.Enabled, &c.CreatedAt)
 	if err != nil {
 		return c, err
 	}
 	if metricKey.Valid {
 		c.MetricKey = &metricKey.String
+	}
+	if threshold.Valid {
+		v := threshold.Float64
+		c.ThresholdPct = &v
 	}
 	c.ChannelConfig = json.RawMessage(cfg)
 	return c, nil
