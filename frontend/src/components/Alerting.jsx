@@ -51,11 +51,19 @@ export default function Alerting({ apps, onAuthError }) {
   const [suggestedPct, setSuggestedPct] = useState(() =>
     Object.fromEntries(SUGGESTIONS.map((s) => [s.id, String(s.defaultPct)])),
   )
+  const [serviceQuery, setServiceQuery] = useState('')
+  const [serviceOpen, setServiceOpen] = useState(false)
 
   const app = useMemo(
     () => apps.find((a) => String(a.id) === String(appId)),
     [apps, appId],
   )
+
+  const filteredApps = useMemo(() => {
+    const q = serviceQuery.trim().toLowerCase()
+    if (!q) return apps
+    return apps.filter((a) => a.name.toLowerCase().includes(q))
+  }, [apps, serviceQuery])
 
   useEffect(() => {
     if (!apps.length) return
@@ -85,9 +93,15 @@ export default function Alerting({ apps, onAuthError }) {
     reload()
   }, [app?.id])
 
+  // Keep the search box in sync with the selected service when not typing.
+  useEffect(() => {
+    if (!app || serviceOpen) return
+    setServiceQuery(app.name)
+  }, [app?.id, app?.name, serviceOpen])
+
   async function submitAlert({ metric_key, threshold_pct }) {
     if (!app) {
-      setError('Select a service above')
+      setError('Select a service in Setup')
       return
     }
     if (!url.trim()) {
@@ -173,40 +187,74 @@ export default function Alerting({ apps, onAuthError }) {
 
   return (
     <div className="content-inner fade-in alert-page">
-      {/* Service context — page-owned, not header dropdown */}
-      <div className="alert-toolbar">
-        <div>
-          <div className="section-label" style={{ margin: 0 }}>SERVICE</div>
-          <div className="service-tabs" role="tablist" aria-label="Service">
-            {apps.length === 0 && <span className="service-tab muted">No services</span>}
-            {apps.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                role="tab"
-                aria-selected={String(a.id) === String(appId)}
-                className={`service-tab${String(a.id) === String(appId) ? ' on' : ''}`}
-                onClick={() => setAppId(String(a.id))}
-              >
-                {a.name}
-              </button>
-            ))}
-          </div>
+      {(notice || error) && (
+        <div className={`alert-banner${error ? ' bad' : ''}`} role="status">
+          {error || notice}
         </div>
-        {(notice || error) && (
-          <div className={`alert-banner${error ? ' bad' : ''}`} role="status">
-            {error || notice}
-          </div>
-        )}
-      </div>
+      )}
 
-      {/* Destination first — shared by custom + suggested */}
+      {/* Setup: searchable service + destination — scales to many services */}
       <section className="panel">
         <div className="panel-head">
-          <span className="panel-title">Where to notify</span>
-          <span className="legend">used by every alert you create on this page</span>
+          <span className="panel-title">Setup</span>
+          <span className="legend">pick a service, then where alerts should go</span>
         </div>
-        <div className="panel-body dest-grid">
+        <div className="panel-body setup-grid">
+          <label className="field service-field">
+            <span className="field-label">Service</span>
+            <div className="service-combo">
+              <input
+                className="text-input"
+                value={serviceQuery}
+                placeholder="Search services…"
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-expanded={serviceOpen}
+                aria-controls="service-listbox"
+                onFocus={() => setServiceOpen(true)}
+                onChange={(e) => {
+                  setServiceQuery(e.target.value)
+                  setServiceOpen(true)
+                }}
+                onBlur={() => {
+                  // Delay so list item click registers.
+                  setTimeout(() => {
+                    setServiceOpen(false)
+                    if (app) setServiceQuery(app.name)
+                  }, 120)
+                }}
+              />
+              {serviceOpen && (
+                <ul id="service-listbox" className="service-menu" role="listbox">
+                  {filteredApps.length === 0 && (
+                    <li className="service-menu-empty">No matching services</li>
+                  )}
+                  {filteredApps.map((a) => (
+                    <li key={a.id} role="option" aria-selected={String(a.id) === String(appId)}>
+                      <button
+                        type="button"
+                        className={`service-option${String(a.id) === String(appId) ? ' on' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setAppId(String(a.id))
+                          setServiceQuery(a.name)
+                          setServiceOpen(false)
+                        }}
+                      >
+                        {a.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {app && (
+              <span className="field-hint">
+                Configuring alerts for <strong>{app.name}</strong>
+              </span>
+            )}
+          </label>
+
           <label className="field">
             <span className="field-label">Channel</span>
             <div className="seg" role="group" aria-label="Channel type">
@@ -226,6 +274,7 @@ export default function Alerting({ apps, onAuthError }) {
               </button>
             </div>
           </label>
+
           <label className="field grow">
             <span className="field-label">{channelType === 'slack' ? 'Incoming webhook URL' : 'Endpoint URL'}</span>
             <input
@@ -239,6 +288,7 @@ export default function Alerting({ apps, onAuthError }) {
               }
             />
           </label>
+
           <div className={`dest-status${urlReady ? ' ok' : ''}`}>
             {urlReady ? 'Ready' : 'URL required'}
           </div>
