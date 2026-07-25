@@ -154,7 +154,7 @@ export default function App() {
               <span className="header-sub">{sub}</span>
             </div>
             <div className="header-controls">
-              {page !== 'ai' && (
+              {page !== 'ai' && page !== 'alerting' && (
                 <select className="pill" value={app} onChange={(e) => setApp(e.target.value)} aria-label="Select app">
                   {apps.length === 0 && <option value="">no apps</option>}
                   {apps.map((a) => (
@@ -185,7 +185,7 @@ export default function App() {
 
         <div className="content">
           {page === 'deploys' && <Deploys app={app} onAuthError={onAuthError} />}
-          {page === 'alerting' && <Alerting apps={apps} appName={app} onAuthError={onAuthError} />}
+          {page === 'alerting' && <Alerting apps={apps} onAuthError={onAuthError} />}
           {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
           {page === 'dashboards' && (
             <div className="content-inner fade-in">
