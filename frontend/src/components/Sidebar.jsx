@@ -52,6 +52,7 @@ const ITEMS = [
   { icon: 'home', label: 'Home', page: 'home' },
   { icon: 'grid', label: 'Dashboards', page: 'dashboards' },
   { icon: 'deploys', label: 'Deploys', page: 'deploys' },
+  { icon: 'ai', label: 'Ask AI', page: 'askai' },
   { icon: 'alert', label: 'Alerting', page: 'alerting' },
   { icon: 'ai', label: 'AI Settings', page: 'ai' },
   { icon: 'explore', label: 'Explore', page: 'explore' },

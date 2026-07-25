@@ -110,9 +110,9 @@ func serviceClauses(q TelemetryQuery) []string {
 	if q.Service != "" {
 		clauses = append(clauses, fmt.Sprintf("service.name = '%s'", escapeLiteral(q.Service)))
 	}
-	if q.Environment != "" {
-		clauses = append(clauses, fmt.Sprintf("deployment.environment = '%s'", escapeLiteral(q.Environment)))
-	}
+	// NB: no deployment.environment clause — SigNoz rejects the whole search
+	// expression when the attribute isn't present on the signal, and service.name
+	// already scopes it. Re-add per-signal only once the app emits that attribute.
 	return clauses
 }
 

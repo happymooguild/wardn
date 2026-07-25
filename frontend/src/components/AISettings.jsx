@@ -17,6 +17,7 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
   const [state, setState] = useState(null)
   const [kind, setKind] = useState('anthropic')
   const [model, setModel] = useState('')
+  const [customMode, setCustomMode] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [baseURL, setBaseURL] = useState('')
   const [busy, setBusy] = useState('')
@@ -28,7 +29,11 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
       const data = await fetchAIProvider()
       setState(data)
       if (data.provider?.kind) setKind(data.provider.kind)
-      if (data.provider?.model) setModel(data.provider.model)
+      if (data.provider?.model) {
+        setModel(data.provider.model)
+        const opts = data.models?.[data.provider.kind] ?? []
+        setCustomMode(!opts.includes(data.provider.model))
+      }
       if (data.provider?.base_url) setBaseURL(data.provider.base_url)
     } catch (e) {
       setError(String(e.message || e))
@@ -41,6 +46,7 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
   }, [])
 
   const defaultModel = state?.default_models?.[kind] ?? ''
+  const modelOptions = state?.models?.[kind] ?? []
 
   async function save(e) {
     e.preventDefault()
@@ -133,7 +139,15 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
             <form className="ai-form" onSubmit={save}>
               <label>
                 Provider
-                <select className="pill" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <select
+                  className="pill"
+                  value={kind}
+                  onChange={(e) => {
+                    setKind(e.target.value)
+                    setModel('')
+                    setCustomMode(false)
+                  }}
+                >
                   {(state?.kinds ?? ['anthropic', 'openai']).map((k) => (
                     <option key={k} value={k}>
                       {k}
@@ -144,13 +158,40 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
 
               <label>
                 Model
-                <input
-                  className="text-input"
-                  value={model}
-                  placeholder={defaultModel}
-                  onChange={(e) => setModel(e.target.value)}
-                />
+                <select
+                  className="pill"
+                  value={customMode ? '__custom__' : model}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setCustomMode(true)
+                      setModel('')
+                    } else {
+                      setCustomMode(false)
+                      setModel(e.target.value)
+                    }
+                  }}
+                >
+                  <option value="">Default · {defaultModel}</option>
+                  {modelOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom…</option>
+                </select>
               </label>
+
+              {customMode && (
+                <label>
+                  Custom model id
+                  <input
+                    className="text-input"
+                    value={model}
+                    placeholder={defaultModel}
+                    onChange={(e) => setModel(e.target.value)}
+                  />
+                </label>
+              )}
 
               <label>
                 API key
@@ -211,6 +252,11 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
             <div className="muted" style={{ fontSize: 13, padding: '14px 16px 4px' }}>
               When enabled, a regression on these services triggers root-cause analysis
               automatically. Ask AI stays available on every deploy either way.
+              {!state?.configured && (
+                <span style={{ color: 'var(--text-faint)' }}>
+                  {' '}Configure a provider above for auto-analysis to actually run.
+                </span>
+              )}
             </div>
             {apps.length === 0 ? (
               <div className="empty" style={{ height: 120 }}>
@@ -233,7 +279,6 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
                           <input
                             type="checkbox"
                             checked={!!a.ai_enabled}
-                            disabled={!state?.configured}
                             onChange={(e) => toggleApp(a.id, e.target.checked)}
                           />
                           <span>{a.ai_enabled ? 'on' : 'off'}</span>

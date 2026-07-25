@@ -107,10 +107,20 @@ func (a *API) getAIProvider(c *gin.Context) {
 		"source":         "",
 		"kinds":          ai.Kinds(),
 		"can_store_keys": a.box != nil,
-		"default_models": gin.H{
-			ai.KindAnthropic: ai.DefaultAnthropicModel,
-			ai.KindOpenAI:    ai.DefaultOpenAIModel,
-		},
+		"default_models": func() gin.H {
+			m := gin.H{}
+			for _, k := range ai.Kinds() {
+				m[k] = ai.DefaultModel(k)
+			}
+			return m
+		}(),
+		"models": func() gin.H {
+			m := gin.H{}
+			for _, k := range ai.Kinds() {
+				m[k] = ai.ModelsFor(k)
+			}
+			return m
+		}(),
 	}
 
 	provider, err := a.st.EnabledAIProvider(c)

@@ -103,6 +103,10 @@ func main() {
 		}
 		if otlp != "" {
 			postOTLP(client, otlp, appName, appVer, value, errorRate, rps, cpu, mem)
+			// Logs + traces give the AI root-cause pass real before/after evidence:
+			// a regressed build emits ERROR logs and slow/failed spans.
+			postOTLPTrace(client, otlp, appName, appVer, value, regressed)
+			postOTLPLog(client, otlp, appName, appVer, value, regressed)
 		}
 	}
 }
@@ -176,6 +180,102 @@ func postOTLP(client *http.Client, endpoint, service, version string, latencyMS,
 	if resp.StatusCode >= 300 {
 		log.Printf("otlp export: status %d", resp.StatusCode)
 	}
+}
+
+// regressed failure causes the AI can reason over.
+var regressCauses = []string{
+	"payment gateway timeout",
+	"db connection pool exhausted: no connection available",
+	"downstream inventory-service returned 503",
+	"checkout handler deadline exceeded",
+}
+
+// postOTLPLog sends one OTLP/HTTP log record. Healthy builds log INFO; regressed
+// builds log ERROR with a plausible cause so the analyzer's error-log query has
+// signal.
+func postOTLPLog(client *http.Client, endpoint, service, version string, latencyMS float64, regressed bool) {
+	nowNano := fmt.Sprintf("%d", time.Now().UnixNano())
+	sevNum, sevText := 9, "INFO"
+	body := fmt.Sprintf("GET /checkout completed in %.0fms", latencyMS)
+	if regressed {
+		sevNum, sevText = 17, "ERROR"
+		body = fmt.Sprintf("%s (%.0fms)", regressCauses[rand.Intn(len(regressCauses))], latencyMS)
+	}
+	payload := map[string]any{
+		"resourceLogs": []any{map[string]any{
+			"resource": map[string]any{"attributes": []any{kv("service.name", service), kv("service.version", version)}},
+			"scopeLogs": []any{map[string]any{
+				"scope": map[string]any{"name": "wardn-sample-app"},
+				"logRecords": []any{map[string]any{
+					"timeUnixNano":   nowNano,
+					"severityNumber": sevNum,
+					"severityText":   sevText,
+					"body":           map[string]any{"stringValue": body},
+					"attributes":     []any{kv("service_name", service), kv("version", version)},
+				}},
+			}},
+		}},
+	}
+	postOTLPSignal(client, endpoint, "/v1/logs", payload)
+}
+
+// postOTLPTrace sends one OTLP/HTTP span. Duration tracks latency; regressed
+// builds mark the span ERROR (status code 2).
+func postOTLPTrace(client *http.Client, endpoint, service, version string, latencyMS float64, regressed bool) {
+	end := time.Now()
+	start := end.Add(-time.Duration(latencyMS) * time.Millisecond)
+	statusCode := 1 // OK
+	if regressed {
+		statusCode = 2 // ERROR
+	}
+	payload := map[string]any{
+		"resourceSpans": []any{map[string]any{
+			"resource": map[string]any{"attributes": []any{kv("service.name", service), kv("service.version", version)}},
+			"scopeSpans": []any{map[string]any{
+				"scope": map[string]any{"name": "wardn-sample-app"},
+				"spans": []any{map[string]any{
+					"traceId":           randHex(16),
+					"spanId":            randHex(8),
+					"name":              "GET /checkout",
+					"kind":              2,
+					"startTimeUnixNano": fmt.Sprintf("%d", start.UnixNano()),
+					"endTimeUnixNano":   fmt.Sprintf("%d", end.UnixNano()),
+					"status":            map[string]any{"code": statusCode},
+					"attributes":        []any{kv("service_name", service), kv("version", version)},
+				}},
+			}},
+		}},
+	}
+	postOTLPSignal(client, endpoint, "/v1/traces", payload)
+}
+
+func postOTLPSignal(client *http.Client, endpoint, path string, payload map[string]any) {
+	body, _ := json.Marshal(payload)
+	base := strings.TrimSuffix(strings.TrimSuffix(endpoint, "/v1/metrics"), "/")
+	req, err := http.NewRequest(http.MethodPost, base+path, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("otlp %s: %v", path, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		log.Printf("otlp %s: status %d", path, resp.StatusCode)
+	}
+}
+
+// randHex returns a random hex string of n bytes (2n hex chars) for trace IDs.
+func randHex(n int) string {
+	const hexd = "0123456789abcdef"
+	b := make([]byte, n*2)
+	for i := range b {
+		b[i] = hexd[rand.Intn(16)]
+	}
+	return string(b)
 }
 
 func gaugeMetric(name, unit string, value float64, ts int64, service, version string) map[string]any {

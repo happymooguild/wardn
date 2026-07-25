@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -11,6 +12,11 @@ import (
 	"wardn/metrics"
 	"wardn/store"
 )
+
+// maxStoredTelemetry caps how many records per window we persist, keeping the
+// JSONB rows bounded while still over-fetching enough for the AI bounder to pick
+// a representative top-N.
+const maxStoredTelemetry = 100
 
 // processAI runs the LLM root-cause pass for one deploy.
 //
@@ -52,7 +58,7 @@ func (w *Worker) processAI(ctx context.Context, job store.AnalysisJob, deploy st
 		Snapshots: snapshots,
 	}
 	input.LogsBefore, input.LogsAfter, input.TracesBefore, input.TracesAfter, input.TelemetryError =
-		w.gatherTelemetry(ctx, app, deploy)
+		w.loadOrFetchTelemetry(ctx, app, deploy)
 
 	req, stats := ai.Build(input, w.Bounds)
 	log.Printf("analyzer: ai deploy %d — prompt %d chars, %d/%d after-logs, %d/%d after-traces",
@@ -112,11 +118,87 @@ func (w *Worker) terminal(ctx context.Context, job store.AnalysisJob, analysisID
 	return w.Store.CompleteJob(ctx, job.ID)
 }
 
-// gatherTelemetry fetches logs and traces for both windows. Telemetry is
-// best-effort: if SigNoz is unreachable the analysis still runs on metrics
-// alone, with the prompt told explicitly that log evidence was missing rather
-// than being left to infer the service was clean.
+// loadOrFetchTelemetry returns the deploy's before/after logs and traces. It
+// prefers the copy captured to Postgres at analysis time (so the AI reasons over
+// the evidence as it was in the window, regardless of when it's asked or SigNoz
+// retention) and falls back to a live pull for deploys captured before this
+// existed or whose capture failed.
+func (w *Worker) loadOrFetchTelemetry(ctx context.Context, app store.App, deploy store.DeployEvent) (
+	logsBefore, logsAfter []metrics.LogRecord,
+	tracesBefore, tracesAfter []metrics.SpanRecord,
+	telemetryErr string,
+) {
+	if lb, la, tb, ta, found, err := w.Store.LoadTelemetry(ctx, deploy.ID); err == nil && found {
+		_ = json.Unmarshal(lb, &logsBefore)
+		_ = json.Unmarshal(la, &logsAfter)
+		_ = json.Unmarshal(tb, &tracesBefore)
+		_ = json.Unmarshal(ta, &tracesAfter)
+		log.Printf("analyzer: ai deploy %d telemetry from store (logs %d/%d, traces %d/%d)",
+			deploy.ID, len(logsAfter), len(logsBefore), len(tracesAfter), len(tracesBefore))
+		return logsBefore, logsAfter, tracesBefore, tracesAfter, ""
+	}
+	log.Printf("analyzer: ai deploy %d telemetry not stored — fetching live", deploy.ID)
+	return w.gatherTelemetry(ctx, app, deploy)
+}
+
+// captureTelemetry pulls the deploy's before/after logs and traces from SigNoz
+// and persists them, so the AI later reads from Postgres. Called from the
+// metrics pass once the after-window has elapsed. Best-effort: nothing here can
+// fail the verdict. Skips saving when the fetch came back empty-with-error so a
+// later AI run can still try live.
+func (w *Worker) captureTelemetry(ctx context.Context, app store.App, deploy store.DeployEvent, beforeStart, beforeEnd, afterStart, afterEnd time.Time) {
+	if w.Telemetry == nil {
+		return
+	}
+	lb, la, tb, ta, errStr := w.fetchTelemetryWindows(ctx, app, beforeStart, beforeEnd, afterStart, afterEnd)
+	if errStr != "" {
+		log.Printf("analyzer: deploy %d telemetry capture skipped: %s", deploy.ID, errStr)
+		return
+	}
+	capL := func(x []metrics.LogRecord) []metrics.LogRecord {
+		if len(x) > maxStoredTelemetry {
+			return x[:maxStoredTelemetry]
+		}
+		return x
+	}
+	capS := func(x []metrics.SpanRecord) []metrics.SpanRecord {
+		if len(x) > maxStoredTelemetry {
+			return x[:maxStoredTelemetry]
+		}
+		return x
+	}
+	lbJ, _ := json.Marshal(capL(lb))
+	laJ, _ := json.Marshal(capL(la))
+	tbJ, _ := json.Marshal(capS(tb))
+	taJ, _ := json.Marshal(capS(ta))
+	if err := w.Store.SaveTelemetry(ctx, deploy.ID, lbJ, laJ, tbJ, taJ); err != nil {
+		log.Printf("analyzer: deploy %d save telemetry: %v", deploy.ID, err)
+		return
+	}
+	log.Printf("analyzer: deploy %d captured telemetry (logs %d/%d, traces %d/%d)",
+		deploy.ID, len(la), len(lb), len(ta), len(tb))
+}
+
+// gatherTelemetry fetches logs and traces for the deploy's standard before/after
+// windows (the live path, used as a fallback by loadOrFetchTelemetry).
 func (w *Worker) gatherTelemetry(ctx context.Context, app store.App, deploy store.DeployEvent) (
+	logsBefore, logsAfter []metrics.LogRecord,
+	tracesBefore, tracesAfter []metrics.SpanRecord,
+	telemetryErr string,
+) {
+	window := time.Duration(app.WindowSeconds) * time.Second
+	if window <= 0 {
+		window = 2 * time.Minute
+	}
+	t := deploy.DeployedAt.UTC()
+	return w.fetchTelemetryWindows(ctx, app, t.Add(-window), t, t.Add(afterSettle), t.Add(afterSettle+window))
+}
+
+// fetchTelemetryWindows pulls error logs and slow/failed traces for explicit
+// before/after windows. Best-effort: if SigNoz is unreachable the analysis still
+// runs on metrics alone, with the prompt told explicitly that log evidence was
+// missing rather than being left to infer the service was clean.
+func (w *Worker) fetchTelemetryWindows(ctx context.Context, app store.App, beforeStart, beforeEnd, afterStart, afterEnd time.Time) (
 	logsBefore, logsAfter []metrics.LogRecord,
 	tracesBefore, tracesAfter []metrics.SpanRecord,
 	telemetryErr string,
@@ -125,12 +207,6 @@ func (w *Worker) gatherTelemetry(ctx context.Context, app store.App, deploy stor
 		return nil, nil, nil, nil, "no telemetry provider configured (set SIGNOZ_URL and SIGNOZ_API_KEY)"
 	}
 
-	window := time.Duration(app.WindowSeconds) * time.Second
-	if window <= 0 {
-		window = 2 * time.Minute
-	}
-	t := deploy.DeployedAt.UTC()
-
 	service := app.SignozServiceName
 	if service == "" {
 		service = app.Name
@@ -138,11 +214,11 @@ func (w *Worker) gatherTelemetry(ctx context.Context, app store.App, deploy stor
 
 	beforeQ := metrics.TelemetryQuery{
 		Service: service, Environment: app.Environment,
-		Start: t.Add(-window), End: t, ErrorsOnly: true,
+		Start: beforeStart, End: beforeEnd, ErrorsOnly: true,
 	}
 	afterQ := metrics.TelemetryQuery{
 		Service: service, Environment: app.Environment,
-		Start: t, End: t.Add(window), ErrorsOnly: true,
+		Start: afterStart, End: afterEnd, ErrorsOnly: true,
 	}
 	// Ask for more than the bounder will keep: dedup collapses duplicates, so
 	// over-fetching is what makes the top-N actually representative.
@@ -173,11 +249,11 @@ func (w *Worker) gatherTelemetry(ctx context.Context, app store.App, deploy stor
 	// Only report a telemetry failure when it actually left us empty-handed.
 	// A partial fetch is still worth reasoning over.
 	if firstErr != nil && len(logsAfter) == 0 && len(tracesAfter) == 0 {
-		log.Printf("analyzer: ai deploy %d telemetry unavailable: %v", deploy.ID, firstErr)
+		log.Printf("analyzer: telemetry unavailable for %s: %v", app.Name, firstErr)
 		return nil, nil, nil, nil, firstErr.Error()
 	}
 	if firstErr != nil {
-		log.Printf("analyzer: ai deploy %d partial telemetry: %v", deploy.ID, firstErr)
+		log.Printf("analyzer: partial telemetry for %s: %v", app.Name, firstErr)
 	}
 	return logsBefore, logsAfter, tracesBefore, tracesAfter, ""
 }

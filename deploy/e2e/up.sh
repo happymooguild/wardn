@@ -123,11 +123,18 @@ if [ "$WITH_SIGNOZ" = 1 ]; then
 fi
 
 # ---- wardn ----
+# Random key so the UI can store AI provider credentials encrypted at rest.
+# Reuse the existing one on re-runs so already-stored keys stay decryptable.
+WARDN_SECRET_KEY="$(kubectl get secret wardn-secrets -o jsonpath='{.data.wardn-secret-key}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+if [ -z "$WARDN_SECRET_KEY" ]; then
+  WARDN_SECRET_KEY="$(openssl rand -hex 32 2>/dev/null || head -c32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+fi
 log "installing wardn"
 helm upgrade --install wardn "$REPO_ROOT/deploy/helm/wardn" \
   -f "$E2E_DIR/values-e2e.yaml" \
   --set backend.signozUrl="$SIGNOZ_URL" \
   --set backend.signozApiKey="$SIGNOZ_API_KEY" \
+  --set backend.secretKey="$WARDN_SECRET_KEY" \
   --set sampleApp.otlpEndpoint="$OTLP_ENDPOINT" \
   --wait --timeout 5m
 log "wardn is up — dashboard http://localhost:8088  (admin / admin@12345)"

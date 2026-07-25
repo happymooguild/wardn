@@ -1017,6 +1017,15 @@ select.pill:hover { border-color: var(--border-hover); }
 .dash-view-head { display: flex; align-items: center; justify-content: space-between; }
 .dash-view-title { display: flex; align-items: center; gap: 10px; }
 
+/* Ask AI: version compare */
+.compare-controls { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.compare-vs { color: var(--text-faint); font-size: 18px; padding-bottom: 8px; }
+.ai-summary { font-size: 15px; color: var(--text-bright); line-height: 1.5; }
+.ai-detail { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; margin-top: 8px; white-space: pre-wrap; }
+.ai-evidence { margin: 6px 0 0; padding-left: 18px; }
+.ai-evidence li { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+.delta-bad { color: var(--danger); font-weight: 600; }
+
 /* Dashboards landing: a plain list of names. */
 .dash-list { display: flex; flex-direction: column; gap: 8px; }
 .dash-list-item {

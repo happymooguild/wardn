@@ -84,11 +84,12 @@ func (e *ErrRefused) Error() string {
 // VerdictSchema is the JSON Schema handed to the provider's structured-output
 // mode. Kept in one place so both adapters constrain the model identically.
 func VerdictSchema() map[string]any {
+	// NB: no maxItems — Anthropic's output_config.format.schema rejects it on
+	// arrays. The cap is stated in the description instead, which the model honors.
 	strArray := func(desc string, maxItems int) map[string]any {
 		return map[string]any{
 			"type":        "array",
-			"description": desc,
-			"maxItems":    maxItems,
+			"description": fmt.Sprintf("%s (at most %d).", desc, maxItems),
 			"items":       map[string]any{"type": "string"},
 		}
 	}
@@ -126,8 +127,13 @@ func parseVerdict(raw string) (Verdict, error) {
 	if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
 		return v, fmt.Errorf("decode verdict: %w (got %s)", err, truncate(trimmed, 200))
 	}
+	// Some prompts (e.g. a version comparison with no captured logs/traces) leave
+	// likely_cause empty and put everything in summary. Fall back rather than fail.
 	if v.LikelyCause == "" {
-		return v, fmt.Errorf("model returned no likely_cause")
+		v.LikelyCause = v.Summary
+	}
+	if v.LikelyCause == "" {
+		return v, fmt.Errorf("model returned an empty verdict")
 	}
 	switch v.Confidence {
 	case "low", "medium", "high":

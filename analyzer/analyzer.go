@@ -289,6 +289,11 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 	// SigNoz, and only around markers.
 	w.ingestVersionMetrics(ctx, app, deploy, afterStart, afterEnd)
 
+	// Capture before/after logs and traces to Postgres now, while the window is
+	// fresh in SigNoz, so the AI reasons over stored evidence rather than a live
+	// query that may run much later (or past retention).
+	w.captureTelemetry(ctx, app, deploy, beforeStart, beforeEnd, afterStart, afterEnd)
+
 	status := "healthy"
 	var reason *string
 	volumeOK := false

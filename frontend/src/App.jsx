@@ -5,6 +5,7 @@ import Deploys from './components/Deploys.jsx'
 import Dashboards from './components/Dashboards.jsx'
 import Alerting from './components/Alerting.jsx'
 import AISettings from './components/AISettings.jsx'
+import AskAIPage from './components/AskAIPage.jsx'
 import Home from './components/Home.jsx'
 import Explore from './components/Explore.jsx'
 import { fetchApps, me, logout } from './api.js'
@@ -13,6 +14,7 @@ const PAGE_META = {
   home: { title: 'Home', sub: 'what wardn can do, and how your apps are doing right now' },
   dashboards: { title: 'Dashboards', sub: 'per-version metrics from SigNoz, snapshotted around each deploy' },
   deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
+  askai: { title: 'Ask AI', sub: 'compare two versions — metrics, logs and traces, explained' },
   alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
   ai: { title: 'AI Settings', sub: 'provider credentials and automatic root-cause analysis' },
   explore: { title: 'Explore', sub: 'everything wardn can do, in one place' },
@@ -100,6 +102,7 @@ export default function App() {
           {page === 'deploys' && (
             <Deploys apps={apps} onAuthError={onAuthError} onAppCreated={() => loadApps()} />
           )}
+          {page === 'askai' && <AskAIPage apps={apps} onAuthError={onAuthError} />}
           {page === 'alerting' && <Alerting apps={apps} onAuthError={onAuthError} />}
           {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
           {page === 'explore' && <Explore onNavigate={setPage} />}

@@ -293,6 +293,18 @@ CREATE TABLE IF NOT EXISTS metric_snapshots (
     UNIQUE (deploy_event_id, metric_key)
 );
 
+-- Before/after logs and traces captured from SigNoz at analysis time (one row
+-- per deploy), so the AI reads evidence from Postgres — not a live SigNoz query
+-- that may run long after the window and past retention.
+CREATE TABLE IF NOT EXISTS deploy_telemetry (
+    deploy_event_id BIGINT PRIMARY KEY REFERENCES deploy_events(id) ON DELETE CASCADE,
+    logs_before     JSONB NOT NULL DEFAULT '[]',
+    logs_after      JSONB NOT NULL DEFAULT '[]',
+    traces_before   JSONB NOT NULL DEFAULT '[]',
+    traces_after    JSONB NOT NULL DEFAULT '[]',
+    captured_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS analysis_jobs (
     id              BIGSERIAL PRIMARY KEY,
     deploy_event_id BIGINT NOT NULL REFERENCES deploy_events(id) ON DELETE CASCADE,
@@ -341,7 +353,7 @@ ALTER TABLE apps ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT fa
 
 CREATE TABLE IF NOT EXISTS ai_providers (
     id           BIGSERIAL PRIMARY KEY,
-    kind         TEXT NOT NULL CHECK (kind IN ('anthropic','openai')),
+    kind         TEXT NOT NULL CHECK (kind IN ('anthropic','openai','gemini')),
     model        TEXT NOT NULL,
     base_url     TEXT NOT NULL DEFAULT '',
     api_key_enc  BYTEA NOT NULL,
@@ -350,6 +362,10 @@ CREATE TABLE IF NOT EXISTS ai_providers (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Widen the provider CHECK on existing installs to include gemini.
+ALTER TABLE ai_providers DROP CONSTRAINT IF EXISTS ai_providers_kind_check;
+ALTER TABLE ai_providers ADD CONSTRAINT ai_providers_kind_check CHECK (kind IN ('anthropic','openai','gemini'));
 
 -- At most one active provider at a time.
 CREATE UNIQUE INDEX IF NOT EXISTS ai_providers_one_enabled
@@ -591,6 +607,30 @@ func (s *Store) CountVersioned(ctx context.Context, appName, metric string) (int
 // x-axis reads left-to-right as deploy history.
 // since bounds the window: only samples at or after it are counted, and versions
 // with no samples in the window drop out entirely.
+// AppVersions lists the distinct versions that have metric data for an app,
+// newest first — the choices for the version-compare picker.
+func (s *Store) AppVersions(ctx context.Context, appName string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT m.version
+		   FROM metrics m JOIN apps a ON a.id = m.app_id
+		  WHERE a.name = $1 AND m.version <> ''
+		  GROUP BY m.version
+		  ORDER BY max(m.ts) DESC`, appName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0, 16)
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string, since time.Time) ([]VersionStat, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.version,

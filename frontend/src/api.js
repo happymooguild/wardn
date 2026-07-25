@@ -52,6 +52,39 @@ export async function createApp(name) {
   return data
 }
 
+// ---- ask AI: version comparison ----
+
+export async function fetchAppVersions(appId) {
+  const res = await fetch(`/api/v1/apps/${appId}/versions`, opts)
+  if (!res.ok) throw new Error(`versions: ${res.status}`)
+  const data = await res.json()
+  return data.versions ?? []
+}
+
+export async function compareVersions(appId, versionA, versionB) {
+  const res = await fetch(`/api/v1/apps/${appId}/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ version_a: versionA, version_b: versionB }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `compare: ${res.status}`)
+  return data
+}
+
+export async function rootCauseVersions(appId, versionA, versionB) {
+  const res = await fetch(`/api/v1/apps/${appId}/root-cause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ version_a: versionA, version_b: versionB }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `root-cause: ${res.status}`)
+  return data
+}
+
 // ---- dashboards ----
 
 export async function fetchDashboards() {

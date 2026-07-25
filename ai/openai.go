@@ -18,6 +18,7 @@ const DefaultOpenAIModel = "gpt-4o"
 // net/http against the chat-completions API — no extra SDK dependency for what
 // is one request shape.
 type OpenAI struct {
+	name    string
 	apiKey  string
 	model   string
 	baseURL string
@@ -32,6 +33,7 @@ func NewOpenAI(apiKey, model, baseURL string, timeout time.Duration) *OpenAI {
 		baseURL = "https://api.openai.com/v1"
 	}
 	return &OpenAI{
+		name:    "openai",
 		apiKey:  apiKey,
 		model:   model,
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -39,7 +41,7 @@ func NewOpenAI(apiKey, model, baseURL string, timeout time.Duration) *OpenAI {
 	}
 }
 
-func (o *OpenAI) Name() string { return "openai" }
+func (o *OpenAI) Name() string { return o.name }
 
 type openAIRequest struct {
 	Model          string          `json:"model"`
