@@ -1,0 +1,48 @@
+# The "storefront" service — the app under observation.
+#
+# ArgoCD syncs this from Gitea. It emits OTLP metrics to SigNoz (so wardn's
+# analyzer can query its before/after latency) and also posts to wardn's
+# dashboard. Bumping the image/version or flipping REGRESSED via deploy-version.sh
+# is the "new deploy" that ArgoCD notices → notification → deploy marker to wardn.
+#
+# __OTLP_ENDPOINT__ is substituted with the discovered SigNoz collector endpoint
+# when this repo is seeded into Gitea (see up.sh).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storefront
+  labels:
+    app: storefront
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: storefront
+  template:
+    metadata:
+      labels:
+        app: storefront
+    spec:
+      containers:
+        - name: storefront
+          image: wardn-sample-app:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WARDN_URL
+              value: "http://wardn-backend.default.svc.cluster.local:8080"
+            - name: WARDN_API_KEY
+              value: "wardn_dev_key_storefront"
+            - name: APP_NAME
+              value: "storefront"
+            - name: APP_VERSION
+              value: "v1.0.0"        # bumped by deploy-version.sh
+            - name: INTERVAL
+              value: "3s"
+            - name: BASE_LATENCY_MS
+              value: "70"
+            - name: REGRESSED
+              value: "false"          # flipped to "true" by deploy-version.sh --regress
+            - name: REGRESSION_ADD_MS
+              value: "160"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "__OTLP_ENDPOINT__"

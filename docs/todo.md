@@ -58,6 +58,14 @@ improvements surfaced while planning. Grouped by why they're deferred.
   from the caller — for the demo, consider `(app, version)` so a re-run doesn't create
   a second event.
 
+## Packaging
+
+- **A clean public Helm chart, separate from the e2e chart.** The current
+  `deploy/helm/wardn` bundles `sample-app` emitters + demo seed data — great for the
+  local end-to-end cluster, not something to publish. Create a separate chart dir with
+  just the real components (backend, frontend, Postgres), no emitters, no demo seeding,
+  values geared for real deployments. The e2e chart stays as the local test harness.
+
 ## Dashboard (skeleton) follow-ups
 
 - **Expand a chart to full screen** — clicking a latency panel (p95 / p99) should
@@ -71,8 +79,13 @@ improvements surfaced while planning. Grouped by why they're deferred.
 
 ## Open questions carried from design-doc §13
 
-1. Verify SigNoz's PromQL query-API compatibility **before** building the metrics
-   abstraction on it. *(This is Stage 1's hour-one spike.)*
+1. ~~Verify SigNoz's PromQL query-API compatibility **before** building the metrics
+   abstraction on it.~~ **Verified (2026-07-25)** against SigNoz v0.133 in the e2e
+   cluster: the provider's `POST /api/v5/query_range` with a `promql` composite
+   query returns time-series as expected, and a regressed deploy produced a real
+   `regressed` verdict (latency_p99 +108%, error_rate +401%) from live SigNoz data.
+   Caveat surfaced: self-hosted SigNoz needs a minted **service-account API key**
+   (`SIGNOZ-API-KEY` header) — there is no static key — so `up.sh` now creates one.
 2. Pick the OIDC library (`goth`, `zitadel/oidc`, or hand-rolled) so the auth interface
    shape is right even before a real provider is wired.
 3. Confirm per-app API key is sufficient auth for the Marker API, or whether production

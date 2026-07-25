@@ -39,6 +39,19 @@ export async function fetchApps() {
   return data.apps ?? []
 }
 
+// Create a new app/service. Returns { app, api_key } — api_key is shown once.
+export async function createApp(name) {
+  const res = await fetch('/api/v1/apps', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `create app: ${res.status}`)
+  return data
+}
+
 export async function fetchVersions(app, range = '1d', metric = 'latency_ms') {
   const params = new URLSearchParams({ app, metric, range })
   const res = await fetch(`/api/v1/versions?${params}`, opts)

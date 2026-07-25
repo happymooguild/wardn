@@ -1,9 +1,6 @@
-# ArgoCD Notifications recipe for wardn deploy markers.
-#
-# Apply alongside argocd-notifications-secret containing:
-#   wardn-api-key: <plaintext per-app API key>
-#
-# Docs: https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/
+# Wires ArgoCD's notifications controller to POST a wardn deploy marker whenever
+# the storefront Application syncs to Healthy. This is the GitOps caller from the
+# design doc, running for real.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,7 +8,7 @@ metadata:
   namespace: argocd
 data:
   service.webhook.wardn: |
-    url: https://wardn.example.com/api/v1/deployments
+    url: http://wardn-backend.default.svc.cluster.local:8080/api/v1/deployments
     headers:
     - name: Content-Type
       value: application/json
@@ -31,7 +28,7 @@ data:
             "source": "argocd"
           }
 
-  # oncePer avoids duplicate markers when health flaps Progressing → Healthy.
+  # oncePer the git revision: one marker per deploy, even if health flaps.
   trigger.on-deployed: |
     - when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
       oncePer: app.status.sync.revision
@@ -40,3 +37,14 @@ data:
   subscriptions: |
     - recipients: [wardn]
       triggers: [on-deployed]
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-notifications-secret
+  namespace: argocd
+type: Opaque
+stringData:
+  # Substituted into the Authorization header above. Must be the API key of the
+  # wardn app whose name matches the Application (.app.metadata.name = storefront).
+  wardn-api-key: wardn_dev_key_storefront
