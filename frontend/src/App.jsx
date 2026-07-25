@@ -184,7 +184,13 @@ export default function App() {
         </header>
 
         <div className="content">
-          {page === 'deploys' && <Deploys app={app} onAuthError={onAuthError} />}
+          {page === 'deploys' && (
+            <Deploys
+              app={app}
+              onAuthError={onAuthError}
+              onAppCreated={(name) => loadApps().then(() => name && setApp(name))}
+            />
+          )}
           {page === 'alerting' && <Alerting apps={apps} appName={app} onAuthError={onAuthError} />}
           {page === 'ai' && <AISettings apps={apps} onAppsChanged={loadApps} onAuthError={onAuthError} />}
           {page === 'dashboards' && (

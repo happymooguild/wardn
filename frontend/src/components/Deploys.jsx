@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { fetchDeploys, fetchDeploy } from '../api.js'
+import { fetchDeploys, fetchDeploy, createApp } from '../api.js'
 import AskAI from './AskAI.jsx'
+import AddAppModal from './AddAppModal.jsx'
 
 const POLL_MS = 5000
 
-export default function Deploys({ app, onAuthError }) {
+export default function Deploys({ app, onAuthError, onAppCreated }) {
   const [deploys, setDeploys] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
     if (!app) return
@@ -59,7 +61,22 @@ export default function Deploys({ app, onAuthError }) {
 
   return (
     <div className="content-inner fade-in">
-      <div className="section-label">DEPLOY EVENTS · {app || '—'}</div>
+      <div className="section-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>DEPLOY EVENTS · {app || '—'}</span>
+        <div className="header-actions">
+          <button type="button" className="add-btn" onClick={() => setShowAdd(true)}>
+            <span className="plus">+</span> Add app / service
+          </button>
+        </div>
+      </div>
+
+      {showAdd && (
+        <AddAppModal
+          onClose={() => setShowAdd(false)}
+          onCreate={createApp}
+          onCreated={(name) => onAppCreated?.(name)}
+        />
+      )}
 
       <div className="split">
         <div className="panel">

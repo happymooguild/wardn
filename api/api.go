@@ -2,6 +2,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +87,7 @@ func New(st *store.Store, opts Options) http.Handler {
 			authed.GET("/versions", a.versions)
 			authed.GET("/metrics", a.series)
 			authed.GET("/apps", a.apps)
+			authed.POST("/apps", a.createApp)
 			authed.GET("/deploys", a.listDeploys)
 			authed.GET("/deploys/:id", a.getDeploy)
 			authed.GET("/apps/:id/alerts", a.listAlerts)
@@ -111,6 +114,57 @@ func New(st *store.Store, opts Options) http.Handler {
 func HashKey(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:])
+}
+
+// GenerateAPIKey mints a fresh per-app marker key. Only its hash is stored, so
+// the plaintext is shown to the operator exactly once at creation time.
+func GenerateAPIKey() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "wardn_" + hex.EncodeToString(b), nil
+}
+
+// appNameRe: 3–64 chars, lowercase letters/digits/hyphens, no leading/trailing
+// hyphen — matches a k8s-ish service name and doubles as the SigNoz service name.
+var appNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$`)
+
+type createAppReq struct {
+	Name string `json:"name"`
+}
+
+// createApp registers a new app/service and returns a freshly generated API key.
+// The key is required (as a Bearer token) on every deploy marker for this app —
+// see createDeployment, which rejects markers whose key doesn't map to the app.
+func (a *API) createApp(c *gin.Context) {
+	var req createAppReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json body"})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if !appNameRe.MatchString(name) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 3–64 chars: lowercase letters, digits and hyphens (no leading/trailing hyphen)"})
+		return
+	}
+	key, err := GenerateAPIKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate api key"})
+		return
+	}
+	app, err := a.st.CreateApp(c, name, HashKey(key))
+	if errors.Is(err, store.ErrAppExists) {
+		c.JSON(http.StatusConflict, gin.H{"error": "an app named " + name + " already exists"})
+		return
+	}
+	if err != nil {
+		log.Printf("create app: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create app"})
+		return
+	}
+	// api_key is the one and only time the plaintext key leaves the server.
+	c.JSON(http.StatusCreated, gin.H{"app": app, "api_key": key})
 }
 
 func HashPassword(pw string) (string, error) {
