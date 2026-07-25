@@ -435,7 +435,12 @@ func (s *Store) CountVersioned(ctx context.Context, appName, metric string) (int
 	return n, err
 }
 
-func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string) ([]VersionStat, error) {
+// VersionsWithStats returns one row per version with its latency percentiles,
+// ordered chronologically (by when the version first appeared) so the chart's
+// x-axis reads left-to-right as deploy history.
+// since bounds the window: only samples at or after it are counted, and versions
+// with no samples in the window drop out entirely.
+func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string, since time.Time) ([]VersionStat, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.version,
 		        percentile_cont(0.5)  WITHIN GROUP (ORDER BY m.value) AS p50,
@@ -447,10 +452,10 @@ func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string) (
 		        max(m.ts) AS last_ts
 		   FROM metrics m
 		   JOIN apps a ON a.id = m.app_id
-		  WHERE a.name = $1 AND m.name = $2 AND m.version <> ''
+		  WHERE a.name = $1 AND m.name = $2 AND m.version <> '' AND m.ts >= $3
 		  GROUP BY m.version
 		  ORDER BY min(m.ts) ASC`,
-		appName, metric)
+		appName, metric, since)
 	if err != nil {
 		return nil, err
 	}
@@ -467,14 +472,16 @@ func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string) (
 	return out, rows.Err()
 }
 
-func (s *Store) VersionSeries(ctx context.Context, appName, metric, version string) ([]Point, error) {
+// VersionSeries returns the raw samples for one version, oldest first — the
+// detail time-series shown when a version is selected.
+func (s *Store) VersionSeries(ctx context.Context, appName, metric, version string, since time.Time) ([]Point, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.ts, m.value
 		   FROM metrics m
 		   JOIN apps a ON a.id = m.app_id
-		  WHERE a.name = $1 AND m.name = $2 AND m.version = $3
+		  WHERE a.name = $1 AND m.name = $2 AND m.version = $3 AND m.ts >= $4
 		  ORDER BY m.ts ASC`,
-		appName, metric, version)
+		appName, metric, version, since)
 	if err != nil {
 		return nil, err
 	}

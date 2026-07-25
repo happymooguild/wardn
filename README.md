@@ -26,7 +26,8 @@ See [`docs/design-doc.md`](docs/design-doc.md) for the full design and
   (`POST /api/v5/query_range` PromQL), writes snapshots, sets deploy status.
 - **Alerting** — Slack + generic webhook; UI under **Alerting**; fires on `regressed`.
 - **Deploys page** — list + before/after snapshot cards.
-- **Existing dashboard** — latency-by-version from Postgres ingest (unchanged).
+- **Dashboard** — latency-by-version from Postgres ingest, with a **time-range
+  selector** (Last 1 day … All time), version chart, percentile tiles, and drill-down.
 - **sample-app** — still posts to wardn; optionally exports OTLP gauges to SigNoz
   when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 
