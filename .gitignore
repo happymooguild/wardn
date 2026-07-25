@@ -1,0 +1,13 @@
+# Go
+/backend/wardn-backend
+/sample-app/sample-app
+*.test
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+
+# Local env
+*.local
+.env

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: wardn
+description: wardn skeleton — backend API, dashboard, Postgres, and a sample metric emitter.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

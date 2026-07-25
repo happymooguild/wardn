@@ -1,0 +1,43 @@
+# Skeleton defaults. Images are built locally and loaded into kind (see
+# deploy/kind/setup.sh), so pullPolicy is IfNotPresent and tags are :dev.
+
+imagePullPolicy: IfNotPresent
+
+# The app the sample-app posts as, and the API key it authenticates with.
+# The backend seeds this app + key on startup.
+app:
+  name: checkout-service
+  apiKey: wardn_dev_key_checkout
+
+postgres:
+  image: postgres:16-alpine
+  db: wardn
+  user: wardn
+  password: wardn
+  storage: emptyDir   # ephemeral — data is lost on pod restart (fine for the skeleton)
+
+backend:
+  image: wardn-backend:dev
+  replicas: 1
+  port: 8080
+
+frontend:
+  image: wardn-frontend:dev
+  replicas: 1
+  service:
+    # NodePort so the dashboard is reachable from the host through the kind
+    # port mapping (see deploy/kind/kind-cluster.yaml).
+    type: NodePort
+    nodePort: 30080
+
+sampleApp:
+  enabled: true
+  image: wardn-sample-app:dev
+  version: "v1.0.10"   # newest version, after the seeded v1.0.0..v1.0.9 history
+  interval: "5s"
+  baseLatencyMs: "60"
+  jitterMs: "12"
+  # Flip to true (and `helm upgrade`) to simulate a bad deploy — the latency
+  # line on the dashboard jumps by regressionAddMs.
+  regressed: false
+  regressionAddMs: "140"

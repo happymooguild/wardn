@@ -1,0 +1,14 @@
+# Backend image build context is the repo root now — exclude everything that
+# isn't the Go backend so the context stays small.
+frontend
+sample-app
+deploy
+docs
+static
+.git
+node_modules
+dist
+*.md
+Dockerfile
+.dockerignore
+docker-compose.yml
