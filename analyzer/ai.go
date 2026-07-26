@@ -21,14 +21,14 @@ const maxStoredTelemetry = 100
 // processAI runs the LLM root-cause pass for one deploy.
 //
 // Failure policy: anything the operator must fix (no provider configured, a
-// refusal, an unusable stored key) is terminal — the analysis row records why
+// refusal, an unusable stored key) is terminal - the analysis row records why
 // and the job completes. Only transient transport errors bubble up to be
 // retried by the job machinery.
 func (w *Worker) processAI(ctx context.Context, job store.AnalysisJob, deploy store.DeployEvent, app store.App) error {
 	analysis, err := w.Store.PendingAnalysis(ctx, deploy.ID)
 	if errors.Is(err, sql.ErrNoRows) {
 		// The row was already resolved (cancelled, or swept as stale). Nothing
-		// to do — completing the job stops it from spinning.
+		// to do - completing the job stops it from spinning.
 		return w.Store.CompleteJob(ctx, job.ID)
 	}
 	if err != nil {
@@ -61,7 +61,7 @@ func (w *Worker) processAI(ctx context.Context, job store.AnalysisJob, deploy st
 		w.loadOrFetchTelemetry(ctx, app, deploy)
 
 	req, stats := ai.Build(input, w.Bounds)
-	log.Printf("analyzer: ai deploy %d — prompt %d chars, %d/%d after-logs, %d/%d after-traces",
+	log.Printf("analyzer: ai deploy %d - prompt %d chars, %d/%d after-logs, %d/%d after-traces",
 		deploy.ID, stats.PromptChars, stats.LogsSentAfter, stats.LogsAvailableAfter,
 		stats.TracesSentAfter, stats.TracesAvailableAfter)
 
@@ -74,13 +74,13 @@ func (w *Worker) processAI(ctx context.Context, job store.AnalysisJob, deploy st
 		if errors.As(err, &refused) {
 			return w.terminal(ctx, job, analysis.ID, "refused", refused.Error(), stats)
 		}
-		// A bad key or an unknown model is terminal — retrying just repeats the
+		// A bad key or an unknown model is terminal - retrying just repeats the
 		// same rejection and delays the operator seeing it.
 		var permanent *ai.ErrPermanent
 		if errors.As(err, &permanent) {
 			return w.terminal(ctx, job, analysis.ID, "failed", permanent.Error(), stats)
 		}
-		// Transport, timeout, or decode failure — let the job retry.
+		// Transport, timeout, or decode failure - let the job retry.
 		return err
 	}
 
@@ -137,7 +137,7 @@ func (w *Worker) loadOrFetchTelemetry(ctx context.Context, app store.App, deploy
 			deploy.ID, len(logsAfter), len(logsBefore), len(tracesAfter), len(tracesBefore))
 		return logsBefore, logsAfter, tracesBefore, tracesAfter, ""
 	}
-	log.Printf("analyzer: ai deploy %d telemetry not stored — fetching live", deploy.ID)
+	log.Printf("analyzer: ai deploy %d telemetry not stored - fetching live", deploy.ID)
 	return w.gatherTelemetry(ctx, app, deploy)
 }
 

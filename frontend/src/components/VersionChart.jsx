@@ -2,7 +2,7 @@
 // connected in deploy order. Hovering a point shows its version + percentiles;
 // clicking selects that version (which drives the tiles + drill-down above/below).
 //
-// Regressed versions — where p99 jumped >20% over the previous version — are
+// Regressed versions - where p99 jumped >20% over the previous version - are
 // drawn in the danger color so the "which deploy hurt?" answer is visible at a glance.
 import { useRef, useState } from 'react'
 
@@ -15,7 +15,7 @@ const PADB = 50
 
 // Release time = when the version's first sample landed, shown in UTC (…Z).
 function fmtReleaseUTC(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   return new Date(iso).toISOString().slice(0, 19).replace('T', ' ') + 'Z'
 }
 

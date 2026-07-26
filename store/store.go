@@ -142,7 +142,7 @@ type AnalysisJob struct {
 }
 
 // AIProvider is a configured LLM credential. The key itself is never in this
-// struct — it lives encrypted in the DB and is only decrypted at call time.
+// struct - it lives encrypted in the DB and is only decrypted at call time.
 type AIProvider struct {
 	ID        int64     `json:"id"`
 	Kind      string    `json:"kind"`
@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS metric_snapshots (
 );
 
 -- Before/after logs and traces captured from SigNoz at analysis time (one row
--- per deploy), so the AI reads evidence from Postgres — not a live SigNoz query
+-- per deploy), so the AI reads evidence from Postgres - not a live SigNoz query
 -- that may run long after the window and past retention.
 CREATE TABLE IF NOT EXISTS deploy_telemetry (
     deploy_event_id BIGINT PRIMARY KEY REFERENCES deploy_events(id) ON DELETE CASCADE,
@@ -608,7 +608,7 @@ func (s *Store) CountVersioned(ctx context.Context, appName, metric string) (int
 // since bounds the window: only samples at or after it are counted, and versions
 // with no samples in the window drop out entirely.
 // AppVersions lists the distinct versions that have metric data for an app,
-// newest first — the choices for the version-compare picker.
+// newest first - the choices for the version-compare picker.
 func (s *Store) AppVersions(ctx context.Context, appName string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT m.version
@@ -663,7 +663,7 @@ func (s *Store) VersionsWithStats(ctx context.Context, appName, metric string, s
 	return out, rows.Err()
 }
 
-// VersionSeries returns the raw samples for one version, oldest first — the
+// VersionSeries returns the raw samples for one version, oldest first - the
 // detail time-series shown when a version is selected.
 func (s *Store) VersionSeries(ctx context.Context, appName, metric, version string, since time.Time) ([]Point, error) {
 	rows, err := s.db.QueryContext(ctx,

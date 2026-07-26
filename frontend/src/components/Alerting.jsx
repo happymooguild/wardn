@@ -193,7 +193,7 @@ export default function Alerting({ apps, onAuthError }) {
         </div>
       )}
 
-      {/* Setup: searchable service + destination — scales to many services */}
+      {/* Setup: searchable service + destination - scales to many services */}
       <section className="panel">
         <div className="panel-head">
           <span className="panel-title">Setup</span>
@@ -296,7 +296,7 @@ export default function Alerting({ apps, onAuthError }) {
       </section>
 
       <div className="alert-split">
-        {/* Custom create — vertical labeled fields */}
+        {/* Custom create - vertical labeled fields */}
         <section className="panel">
           <div className="panel-head">
             <span className="panel-title">Custom alert</span>
@@ -348,7 +348,7 @@ export default function Alerting({ apps, onAuthError }) {
           </div>
         </section>
 
-        {/* Suggested — real cards */}
+        {/* Suggested - real cards */}
         <section className="panel">
           <div className="panel-head">
             <span className="panel-title">Suggested</span>
@@ -422,7 +422,7 @@ export default function Alerting({ apps, onAuthError }) {
                     </td>
                     <td>{metricLabel(a.metric_key)}</td>
                     <td className="mono">
-                      {a.threshold_pct != null ? `${a.threshold_pct}${a.metric_key === 'error_rate' ? ' pp' : '%'}` : '—'}
+                      {a.threshold_pct != null ? `${a.threshold_pct}${a.metric_key === 'error_rate' ? ' pp' : '%'}` : '-'}
                     </td>
                     <td>{a.on_verdict}</td>
                     <td className="row-actions">
@@ -466,11 +466,11 @@ export default function Alerting({ apps, onAuthError }) {
                 {deliveries.map((d) => (
                   <tr key={d.id}>
                     <td>#{d.alert_config_id}</td>
-                    <td>{d.deploy_event_id ? `#${d.deploy_event_id}` : '—'}</td>
+                    <td>{d.deploy_event_id ? `#${d.deploy_event_id}` : '-'}</td>
                     <td>
                       <span className={`badge status-${d.status === 'sent' ? 'healthy' : 'failed'}`}>{d.status}</span>
                     </td>
-                    <td>{d.response_code ?? '—'}</td>
+                    <td>{d.response_code ?? '-'}</td>
                     <td className="muted">{new Date(d.created_at).toLocaleString()}</td>
                   </tr>
                 ))}

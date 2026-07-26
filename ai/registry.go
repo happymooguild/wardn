@@ -16,7 +16,7 @@ const (
 func Kinds() []string { return []string{KindAnthropic, KindOpenAI, KindGemini} }
 
 // ModelsFor returns the curated model choices for a provider's settings
-// dropdown. Not exhaustive — the UI also allows a custom model string.
+// dropdown. Not exhaustive - the UI also allows a custom model string.
 func ModelsFor(kind string) []string {
 	switch kind {
 	case KindAnthropic:

@@ -1,10 +1,10 @@
-// A visual showcase of what wardn does — illustrated feature cards rather
+// A visual showcase of what wardn does - illustrated feature cards rather
 // than a data table. Each card doubles as a shortcut into the real page.
 const FEATURES = [
   {
     page: 'dashboards',
     title: 'Latency by version',
-    desc: 'Every deploy plotted as a point — p50/p90/p95/p99 side by side, with a time-range selector and click-to-inspect drill-down.',
+    desc: 'Every deploy plotted as a point - p50/p90/p95/p99 side by side, with a time-range selector and click-to-inspect drill-down.',
     art: DashboardsArt,
   },
   {
@@ -16,19 +16,19 @@ const FEATURES = [
   {
     page: 'alerting',
     title: 'Regression alerts',
-    desc: 'The moment a deploy regresses, wardn fires to Slack or a generic webhook — with delivery history so you know what actually went out.',
+    desc: 'The moment a deploy regresses, wardn fires to Slack or a generic webhook - with delivery history so you know what actually went out.',
     art: AlertingArt,
   },
   {
     page: 'ai',
     title: 'AI root cause',
-    desc: 'Ask AI reasons over the before/after metrics plus a bounded sample of error logs and slow traces, and explains why — not just that.',
+    desc: 'Ask AI reasons over the before/after metrics plus a bounded sample of error logs and slow traces, and explains why - not just that.',
     art: AiArt,
   },
   {
     page: 'deploys',
     title: 'Deploy-aware pipeline',
-    desc: 'CI/ArgoCD marks a deploy, the analyzer waits out the after-window, then queries SigNoz — fully automatic, no dashboards to babysit.',
+    desc: 'CI/ArgoCD marks a deploy, the analyzer waits out the after-window, then queries SigNoz - fully automatic, no dashboards to babysit.',
     art: PipelineArt,
   },
 ]
@@ -40,7 +40,7 @@ export default function Explore({ onNavigate }) {
         <div className="hero-kicker">EXPLORE · WHAT WARDN CAN DO</div>
         <h2 className="hero-title">One tool, the whole deploy story</h2>
         <p className="hero-sub">
-          From the moment CI marks a release to the moment a regression pings Slack — here's every
+          From the moment CI marks a release to the moment a regression pings Slack - here's every
           piece of the pipeline, and where to find it.
         </p>
       </div>

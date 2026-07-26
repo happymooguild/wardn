@@ -1,4 +1,4 @@
-# The "storefront" service — the app under observation.
+# The "storefront" service - the app under observation.
 #
 # ArgoCD syncs this from Gitea. It emits OTLP metrics to SigNoz (so wardn's
 # analyzer can query its before/after latency) and also posts to wardn's

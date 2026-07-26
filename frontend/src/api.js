@@ -39,7 +39,7 @@ export async function fetchApps() {
   return data.apps ?? []
 }
 
-// Create a new app/service. Returns { app, api_key } — api_key is shown once.
+// Create a new app/service. Returns { app, api_key } - api_key is shown once.
 export async function createApp(name) {
   const res = await fetch('/api/v1/apps', {
     method: 'POST',

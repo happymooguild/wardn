@@ -64,7 +64,7 @@ export default function Deploys({ apps, onAuthError, onAppCreated }) {
         <div className="panel-body" style={{ padding: 0 }}>
           {apps.length === 0 ? (
             <div className="empty" style={{ height: 160 }}>
-              No services yet — click “Add app / service” to register one.
+              No services yet - click “Add app / service” to register one.
             </div>
           ) : (
             <table className="data-table apps-table">
@@ -87,7 +87,7 @@ export default function Deploys({ apps, onAuthError, onAppCreated }) {
                         <span className="app-name">{a.name}</span>
                       </td>
                       <td className="muted">{a.environment}</td>
-                      <td className="mono">{d ? d.version : '—'}</td>
+                      <td className="mono">{d ? d.version : '-'}</td>
                       <td>
                         {d ? (
                           <span className={`badge status-${d.status}`}>{d.status}</span>
@@ -95,7 +95,7 @@ export default function Deploys({ apps, onAuthError, onAppCreated }) {
                           <span className="muted">no deploys</span>
                         )}
                       </td>
-                      <td className="muted">{d ? formatTime(d.deployed_at) : '—'}</td>
+                      <td className="muted">{d ? formatTime(d.deployed_at) : '-'}</td>
                       <td className="muted" style={{ textAlign: 'right' }}>
                         View →
                       </td>
@@ -112,7 +112,7 @@ export default function Deploys({ apps, onAuthError, onAppCreated }) {
 }
 
 function formatTime(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   try {
     return new Date(iso).toLocaleString()
   } catch {

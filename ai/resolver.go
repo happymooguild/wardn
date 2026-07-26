@@ -12,12 +12,12 @@ import (
 )
 
 // ErrNotConfigured means no provider is available from either source. The UI
-// treats it as "set this up", not as a failure — the same posture the analyzer
+// treats it as "set this up", not as a failure - the same posture the analyzer
 // takes when SigNoz is unset.
 var ErrNotConfigured = errors.New("no AI provider configured")
 
 // Credential is the env-supplied fallback, so Compose and Helm can run without
-// anyone opening the settings page — mirroring how SIGNOZ_API_KEY works.
+// anyone opening the settings page - mirroring how SIGNOZ_API_KEY works.
 type Credential struct {
 	Kind    string
 	APIKey  string

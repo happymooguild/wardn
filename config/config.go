@@ -43,7 +43,7 @@ type Config struct {
 	AITimeout         time.Duration
 	AIMaxContextChars int
 	// SecretKey encrypts provider credentials at rest. Unset means credentials
-	// cannot be stored via the UI — the env fallback still works.
+	// cannot be stored via the UI - the env fallback still works.
 	SecretKey string
 }
 
@@ -52,7 +52,7 @@ func Load() Config {
 	return Config{
 		Port:        env("PORT", "8080"),
 		DatabaseURL: env("DATABASE_URL", "postgres://wardn:wardn@localhost:5432/wardn?sslmode=disable"),
-		// "name:key,name:key" — one entry per service.
+		// "name:key,name:key" - one entry per service.
 		SeedApps:   parseAppSeeds(env("SEED_APPS", "checkout-service:wardn_dev_key_checkout,payments-service:wardn_dev_key_payments")),
 		SeedDemo:   envBool("SEED_DEMO", true),
 		SeedMetric: env("SEED_METRIC", "latency_ms"),
@@ -80,7 +80,7 @@ func Load() Config {
 }
 
 // resolveAI picks the fallback provider from the environment. Setting just
-// ANTHROPIC_API_KEY or just OPENAI_API_KEY is enough — AI_PROVIDER only needs
+// ANTHROPIC_API_KEY or just OPENAI_API_KEY is enough - AI_PROVIDER only needs
 // to be set to disambiguate when both are present. AI_API_KEY is the
 // provider-agnostic form, which is what the Helm chart injects from its Secret.
 func resolveAI() (kind, apiKey string) {
@@ -100,7 +100,7 @@ func resolveAI() (kind, apiKey string) {
 	case openaiKey != "":
 		return "openai", openaiKey
 	case generic != "":
-		// Provider unstated — default to Claude, matching AI_MODEL's default.
+		// Provider unstated - default to Claude, matching AI_MODEL's default.
 		return "anthropic", generic
 	}
 	return "", ""

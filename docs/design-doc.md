@@ -237,7 +237,7 @@ own follow-up before it's shipped to those users.
 
 One Helm chart, two components:
 
-- **App**: stateless, 1–2 replicas for the demo (state lives in Postgres, so this scales horizontally later with zero code change).
+- **App**: stateless, 1-2 replicas for the demo (state lives in Postgres, so this scales horizontally later with zero code change).
 - **Postgres**: managed instance for the hackathon to save setup time, or a StatefulSet if going fully self-contained.
 
 Plus: Ingress in front of the Dashboard, and wardn emits its own OTel traces/logs into SigNoz - the tool watching deploys is itself observable in the same stack.

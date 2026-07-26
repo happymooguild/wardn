@@ -78,12 +78,12 @@ func main() {
 			errorRate = 8 + rand.Float64()*4
 		}
 		// Throughput (req/s), with a little jitter. A regressed build sheds load,
-		// so it also dips — giving the throughput dashboard a visible signal.
+		// so it also dips - giving the throughput dashboard a visible signal.
 		rps := baseRPS * (0.95 + rand.Float64()*0.1)
 		if regressed {
 			rps *= 0.7
 		}
-		// Saturation: CPU% and memory. A bad deploy burns more of both — the
+		// Saturation: CPU% and memory. A bad deploy burns more of both - the
 		// classic resource-regression signal alongside latency/errors.
 		cpu := baseCPU * (0.9 + rand.Float64()*0.2)
 		mem := baseMem * (0.95 + rand.Float64()*0.1)

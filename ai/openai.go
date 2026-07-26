@@ -15,7 +15,7 @@ import (
 const DefaultOpenAIModel = "gpt-4o"
 
 // OpenAI is the second adapter, proving the Provider abstraction holds. Plain
-// net/http against the chat-completions API — no extra SDK dependency for what
+// net/http against the chat-completions API - no extra SDK dependency for what
 // is one request shape.
 type OpenAI struct {
 	name    string

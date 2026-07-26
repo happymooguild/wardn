@@ -73,7 +73,7 @@ func main() {
 		provider, telemetry = signoz, signoz
 		log.Printf("signoz metrics provider configured (%s)", cfg.SignozURL)
 	} else {
-		log.Print("SIGNOZ_URL / SIGNOZ_API_KEY unset — analyzer will fail jobs until configured")
+		log.Print("SIGNOZ_URL / SIGNOZ_API_KEY unset - analyzer will fail jobs until configured")
 	}
 
 	// Credentials can be encrypted at rest only if an encryption key exists.
@@ -82,7 +82,7 @@ func main() {
 	if b, err := secret.NewBox(cfg.SecretKey); err == nil {
 		box = b
 	} else {
-		log.Print("WARDN_SECRET_KEY unset — AI keys cannot be saved from the UI; " +
+		log.Print("WARDN_SECRET_KEY unset - AI keys cannot be saved from the UI; " +
 			"set ANTHROPIC_API_KEY / OPENAI_API_KEY instead")
 	}
 

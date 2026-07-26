@@ -12,14 +12,14 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// DefaultAnthropicModel is Claude Opus 4.8 — the latest Opus, 1M context,
+// DefaultAnthropicModel is Claude Opus 4.8 - the latest Opus, 1M context,
 // strongest on the kind of multi-signal reasoning this feature needs.
 const DefaultAnthropicModel = "claude-opus-4-8"
 
 // Anthropic talks to the Claude API via the official Go SDK.
 //
 // Opus 4.8 notes that shape this code:
-//   - temperature / top_p / top_k are removed (400 if sent) — we never set them.
+//   - temperature / top_p / top_k are removed (400 if sent) - we never set them.
 //   - budget_tokens is removed; on the Opus family thinking is OFF unless asked
 //     for, so we set thinking to adaptive explicitly. Depth is tuned with
 //     output_config.effort.
@@ -45,7 +45,7 @@ func NewAnthropic(apiKey, model, baseURL string, timeout time.Duration) *Anthrop
 	return &Anthropic{
 		client: anthropic.NewClient(opts...),
 		model:  model,
-		// The task is bounded and well-specified — medium is the right point on
+		// The task is bounded and well-specified - medium is the right point on
 		// the cost/quality curve. Raise to high if verdicts read as shallow.
 		effort: anthropic.OutputConfigEffortMedium,
 	}
@@ -66,7 +66,7 @@ func (a *Anthropic) Analyze(ctx context.Context, req Request) (Result, error) {
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(req.Prompt)),
 		},
-		// Opus needs thinking enabled explicitly — the whole point here is
+		// Opus needs thinking enabled explicitly - the whole point here is
 		// reasoning over the before/after signals. Adaptive lets Claude pick
 		// the depth; effort tunes the overall spend.
 		Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
@@ -76,7 +76,7 @@ func (a *Anthropic) Analyze(ctx context.Context, req Request) (Result, error) {
 		},
 	})
 	if err != nil {
-		// A bad key or an unknown model won't fix itself on retry — classify it
+		// A bad key or an unknown model won't fix itself on retry - classify it
 		// so the job fails once, loudly, instead of five times.
 		var apiErr *anthropic.Error
 		if errors.As(err, &apiErr) && permanentStatus(apiErr.StatusCode) {

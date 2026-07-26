@@ -1,5 +1,5 @@
 # Throwaway in-cluster Git server that hosts the demo-app repo ArgoCD syncs from.
-# SQLite + emptyDir — nothing here needs to survive a restart.
+# SQLite + emptyDir - nothing here needs to survive a restart.
 apiVersion: v1
 kind: Namespace
 metadata:

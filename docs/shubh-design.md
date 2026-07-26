@@ -1,4 +1,4 @@
-# wardn — Low-Level Design
+# wardn - Low-Level Design
 
 Companion to the HLD in [our-code/wardn/docs/design-doc.md](our-code/wardn/docs/design-doc.md). This document specifies **how each component works internally**: interfaces, algorithms, storage, APIs, and external integrations.
 
@@ -235,13 +235,13 @@ Stored in `metric_snapshots.series_before` / `series_after`:
 ]
 ```
 
-Downsample rule: if backend returns > 300 points, retain ~60–120 evenly spaced points for UI.
+Downsample rule: if backend returns > 300 points, retain ~60-120 evenly spaced points for UI.
 
 ### 3.4 API key hashing
 
 - Generate: `wardn_` + 32 bytes cryptographically random, hex or base64url.
 - Store: `api_key_hash = argon2id(key)`; `api_key_prefix = key[:8]` for display.
-- Lookup: cannot reverse hash — authenticate by scanning apps with matching prefix then `argon2.Verify`, or store `hmac_sha256(server_pepper, key)` as lookup key plus argon2 for defense in depth. **Chosen approach:** `lookup_hash = SHA256(key)` unique index for O(1) auth; `api_key_hash` unused OR drop to single SHA256+pepper if argon2 per-request is too slow. **Final:** `api_key_lookup = HMAC-SHA256(pepper, key)` unique; constant-time compare.
+- Lookup: cannot reverse hash - authenticate by scanning apps with matching prefix then `argon2.Verify`, or store `hmac_sha256(server_pepper, key)` as lookup key plus argon2 for defense in depth. **Chosen approach:** `lookup_hash = SHA256(key)` unique index for O(1) auth; `api_key_hash` unused OR drop to single SHA256+pepper if argon2 per-request is too slow. **Final:** `api_key_lookup = HMAC-SHA256(pepper, key)` unique; constant-time compare.
 
 ---
 
@@ -380,10 +380,10 @@ Adapter responsibilities:
 1. Convert `start`/`end` to Unix ms.
 2. Choose `step` = max(15, window/60) seconds.
 3. Unwrap SigNoz `{status,data}` envelope; map time series → `[]Point`.
-4. Compute `Scalar` = average of points (or last point — **fixed rule: average for rates, last for gauges; metric_definitions may set `aggregation: avg|last|p99_of_series`**). For latency p99 PromQL that already returns a single series of p99 over time, Scalar = average of that series over the window.
+4. Compute `Scalar` = average of points (or last point - **fixed rule: average for rates, last for gauges; metric_definitions may set `aggregation: avg|last|p99_of_series`**). For latency p99 PromQL that already returns a single series of p99 over time, Scalar = average of that series over the window.
 5. Map HTTP errors / SigNoz error status to typed errors: `ErrUnavailable`, `ErrInvalidQuery`, `ErrUnauthorized`.
 
-Alternate: `GET /api/v1/query_range?query=&start=&end=&step=` — Prometheus-shaped params, still `SIGNOZ-API-KEY`. Prefer v5 for parity with logs/traces.
+Alternate: `GET /api/v1/query_range?query=&start=&end=&step=` - Prometheus-shaped params, still `SIGNOZ-API-KEY`. Prefer v5 for parity with logs/traces.
 
 ### 5.3 `apps.metrics_backend` JSON
 
@@ -480,8 +480,8 @@ after  = [T, T + W]
 
 If `now < T + W`, either:
 
-- **Wait:** set `run_after = T + W` and requeue (preferred — equal windows), or
-- Analyze partial after-window (rejected — unequal windows bias).
+- **Wait:** set `run_after = T + W` and requeue (preferred - equal windows), or
+- Analyze partial after-window (rejected - unequal windows bias).
 
 `analysis_delay_seconds` only delays start so metrics are ingested; full after-window still ends at `T+W`.
 
@@ -555,7 +555,7 @@ windows = same before/after as snapshots
 3. traces_after  = SearchTraces(service, after, errors preferentially)
 4. Diff error signatures (message / status_code / span name) → new_errors[]
 5. logs_after = SearchLogs(service, after, severity>=ERROR, limit 50)
-6. Optionally fetch 1–3 full traces by ID for span tree summary (truncate)
+6. Optionally fetch 1-3 full traces by ID for span tree summary (truncate)
 ```
 
 Cap tokens: truncate bodies; keep span names, durations, DB statements attributes if present.
@@ -635,7 +635,7 @@ type AlertEvent struct {
 
 ## 9. Dashboard API
 
-All routes under `/api/v1` except Marker and `/healthz`. Session cookie `wardn_session` (HttpOnly, Secure, SameSite=Lax) or `Authorization: Bearer <user_jwt>` — **pick cookie sessions for browser**.
+All routes under `/api/v1` except Marker and `/healthz`. Session cookie `wardn_session` (HttpOnly, Secure, SameSite=Lax) or `Authorization: Bearer <user_jwt>` - **pick cookie sessions for browser**.
 
 ### 9.1 Auth routes
 

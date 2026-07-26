@@ -138,8 +138,8 @@ func GenerateAPIKey() (string, error) {
 	return "wardn_" + hex.EncodeToString(b), nil
 }
 
-// appNameRe: 3–64 chars, lowercase letters/digits/hyphens, no leading/trailing
-// hyphen — matches a k8s-ish service name and doubles as the SigNoz service name.
+// appNameRe: 3-64 chars, lowercase letters/digits/hyphens, no leading/trailing
+// hyphen - matches a k8s-ish service name and doubles as the SigNoz service name.
 var appNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$`)
 
 type createAppReq struct {
@@ -147,7 +147,7 @@ type createAppReq struct {
 }
 
 // createApp registers a new app/service and returns a freshly generated API key.
-// The key is required (as a Bearer token) on every deploy marker for this app —
+// The key is required (as a Bearer token) on every deploy marker for this app -
 // see createDeployment, which rejects markers whose key doesn't map to the app.
 func (a *API) createApp(c *gin.Context) {
 	var req createAppReq
@@ -157,7 +157,7 @@ func (a *API) createApp(c *gin.Context) {
 	}
 	name := strings.TrimSpace(req.Name)
 	if !appNameRe.MatchString(name) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 3–64 chars: lowercase letters, digits and hyphens (no leading/trailing hyphen)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 3-64 chars: lowercase letters, digits and hyphens (no leading/trailing hyphen)"})
 		return
 	}
 	key, err := GenerateAPIKey()

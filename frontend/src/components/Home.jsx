@@ -1,5 +1,5 @@
 // Landing page: what wardn does, a live cross-app pulse, and shortcuts into
-// every other section — the front door Dashboards/Deploys/Alerting didn't have.
+// every other section - the front door Dashboards/Deploys/Alerting didn't have.
 import { useEffect, useState } from 'react'
 import { fetchDeploys } from '../api.js'
 import { Icon } from './Sidebar.jsx'
@@ -17,7 +17,7 @@ const FEATURES = [
     icon: 'deploys',
     page: 'deploys',
     title: 'Deploys',
-    desc: 'Every deploy marker with its before/after snapshot — see exactly what a release changed.',
+    desc: 'Every deploy marker with its before/after snapshot - see exactly what a release changed.',
   },
   {
     icon: 'alert',
@@ -35,7 +35,7 @@ const FEATURES = [
     icon: 'explore',
     page: 'explore',
     title: 'Explore',
-    desc: 'Query the raw samples behind any version — the drill-down below the percentile charts.',
+    desc: 'Query the raw samples behind any version - the drill-down below the percentile charts.',
   },
 ]
 
@@ -85,7 +85,7 @@ export default function Home({ apps, onNavigate, onAuthError }) {
         <h2 className="hero-title">Did that deploy make things worse?</h2>
         <p className="hero-sub">
           wardn detects when a new version goes live, compares metrics before/after, and can alert
-          Slack or a webhook when things regress — with AI root-cause reasoning one click away.
+          Slack or a webhook when things regress - with AI root-cause reasoning one click away.
         </p>
       </div>
 
@@ -115,7 +115,7 @@ export default function Home({ apps, onNavigate, onAuthError }) {
         <div className="panel-body" style={{ padding: 0 }}>
           {recent.length === 0 ? (
             <div className="empty" style={{ height: 140 }}>
-              No deploy markers yet — POST /api/v1/deployments
+              No deploy markers yet - POST /api/v1/deployments
             </div>
           ) : (
             <table className="data-table">

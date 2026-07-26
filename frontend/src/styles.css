@@ -1,5 +1,5 @@
 /* ============================================================
-   wardn dashboard — styles (design tokens extracted from the
+   wardn dashboard - styles (design tokens extracted from the
    "Wardn Dashboards" design canvas)
    ============================================================ */
 :root {
@@ -862,7 +862,7 @@ select.pill:hover { border-color: var(--border-hover); }
 }
 
 /* ============================================================
-   AI reasoning — "Ask AI" verdict panel + provider settings
+   AI reasoning - "Ask AI" verdict panel + provider settings
    ============================================================ */
 .ai-panel {
   margin-top: 10px;
@@ -896,7 +896,7 @@ select.pill:hover { border-color: var(--border-hover); }
 .ai-verdict { display: flex; flex-direction: column; gap: 10px; }
 .ai-cause-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ai-summary { font-size: 12.5px; color: var(--text-muted); }
-/* The answer itself — the one thing an on-call engineer reads first. */
+/* The answer itself - the one thing an on-call engineer reads first. */
 .ai-cause {
   margin: 0;
   font-size: 14px;

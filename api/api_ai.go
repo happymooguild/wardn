@@ -17,7 +17,7 @@ import (
 
 // analyzeDeploy queues an AI root-cause pass for a deploy ("Ask AI").
 //
-// Async by design: an Opus call over this payload runs for tens of seconds —
+// Async by design: an Opus call over this payload runs for tens of seconds -
 // long enough to trip proxy timeouts and to feel broken behind a spinner. The
 // client polls the returned analysis.
 func (a *API) analyzeDeploy(c *gin.Context) {
@@ -36,7 +36,7 @@ func (a *API) analyzeDeploy(c *gin.Context) {
 
 	if a.ai == nil || !a.ai.Available(c) {
 		c.JSON(http.StatusPreconditionFailed, gin.H{
-			"error": "no AI provider configured — add one under AI Settings",
+			"error": "no AI provider configured - add one under AI Settings",
 		})
 		return
 	}
@@ -98,7 +98,7 @@ func (a *API) getAnalysis(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"analysis": analysis})
 }
 
-// getAIProvider reports the configured provider. It never returns the key —
+// getAIProvider reports the configured provider. It never returns the key -
 // only the last four characters, so an operator can tell which key is
 // installed without the API handing it back.
 func (a *API) getAIProvider(c *gin.Context) {
@@ -136,7 +136,7 @@ func (a *API) getAIProvider(c *gin.Context) {
 		return
 	}
 
-	// Nothing stored — report the env fallback if one exists, so the settings
+	// Nothing stored - report the env fallback if one exists, so the settings
 	// page can explain why AI works without a row in the table.
 	if a.ai != nil {
 		if _, cfg, err := a.ai.Resolve(c); err == nil {

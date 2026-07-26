@@ -204,8 +204,8 @@ var (
 	uuidLike = regexp.MustCompile(`\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b`)
 )
 
-// normalizeLogBody strips the parts that vary per occurrence — ids, counters,
-// quoted values — so "timeout calling user 4821" and "timeout calling user
+// normalizeLogBody strips the parts that vary per occurrence - ids, counters,
+// quoted values - so "timeout calling user 4821" and "timeout calling user
 // 9134" collapse into one group instead of two.
 func normalizeLogBody(body string) string {
 	s := uuidLike.ReplaceAllString(body, "<uuid>")

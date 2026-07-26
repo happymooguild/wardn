@@ -91,7 +91,7 @@ func TestBuildRespectsCaps(t *testing.T) {
 }
 
 func TestBuildEnforcesCharCeiling(t *testing.T) {
-	// Each line must be distinct *after* normalization, so vary by letters —
+	// Each line must be distinct *after* normalization, so vary by letters -
 	// numeric suffixes would (correctly) collapse into one group and never
 	// reach the ceiling.
 	var logs []metrics.LogRecord
@@ -235,7 +235,7 @@ func TestPermanentStatusClassification(t *testing.T) {
 	// Auth/shape errors are terminal; rate limits and server errors are not.
 	for _, code := range []int{400, 401, 403, 404, 413, 422} {
 		if !permanentStatus(code) {
-			t.Errorf("HTTP %d should be permanent — retrying repeats the same rejection", code)
+			t.Errorf("HTTP %d should be permanent - retrying repeats the same rejection", code)
 		}
 	}
 	for _, code := range []int{408, 429, 500, 502, 503, 529} {

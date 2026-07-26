@@ -18,7 +18,7 @@ import (
 //
 // SPIKE PENDING: the exact v5 builder-query shape for the logs and traces
 // signals is reconstructed from the documented API, not yet verified against a
-// live SigNoz — the same caveat design-doc §7 raised for PromQL, and the same
+// live SigNoz - the same caveat design-doc §7 raised for PromQL, and the same
 // class of assumption that made the annotation feature turn out not to exist.
 // Verify against your instance before relying on it. Two things make that
 // cheap: the response parsing below is shape-tolerant (it walks the envelope
@@ -110,7 +110,7 @@ func serviceClauses(q TelemetryQuery) []string {
 	if q.Service != "" {
 		clauses = append(clauses, fmt.Sprintf("service.name = '%s'", escapeLiteral(q.Service)))
 	}
-	// NB: no deployment.environment clause — SigNoz rejects the whole search
+	// NB: no deployment.environment clause - SigNoz rejects the whole search
 	// expression when the attribute isn't present on the signal, and service.name
 	// already scopes it. Re-add per-signal only once the app emits that attribute.
 	return clauses

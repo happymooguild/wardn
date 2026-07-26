@@ -59,11 +59,11 @@ func (a *API) compareVersions(c *gin.Context) {
 		return
 	}
 	if a.ai == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured — set one in AI Settings"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured - set one in AI Settings"})
 		return
 	}
 	if _, _, err := a.ai.Resolve(c); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured — set one in AI Settings"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured - set one in AI Settings"})
 		return
 	}
 
@@ -110,11 +110,11 @@ func (a *API) rootCauseVersions(c *gin.Context) {
 		return
 	}
 	if a.ai == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured — set one in AI Settings"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured - set one in AI Settings"})
 		return
 	}
 	if _, _, err := a.ai.Resolve(c); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured — set one in AI Settings"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no AI provider configured - set one in AI Settings"})
 		return
 	}
 
@@ -289,7 +289,7 @@ func buildComparePrompt(app, vA, vB string, metrics []metricCompare, logsA, logs
 	fmt.Fprintf(&s, "Version B (%s):\n%s\n", vB, renderCompareSpans(tracesB))
 
 	if len(logsA)+len(logsB)+len(tracesA)+len(tracesB) == 0 {
-		s.WriteString("\nNOTE: no logs or traces were captured for either version — reason from the metric changes above and say so.\n")
+		s.WriteString("\nNOTE: no logs or traces were captured for either version - reason from the metric changes above and say so.\n")
 	}
 
 	s.WriteString("\nSummarize what changed from A to B and whether B is a regression. " +

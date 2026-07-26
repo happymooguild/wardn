@@ -119,7 +119,7 @@ export default function CreateDashboardModal({ existing, onClose, onCreate, onCr
               <div className="modal-sub">
                 {done.backfilled_versions > 0
                   ? `Backfilled ${done.backfilled_versions} recent version(s) from SigNoz. Future deploys populate automatically.`
-                  : 'No recent versions had this metric yet — it will populate on the next deploy.'}
+                  : 'No recent versions had this metric yet - it will populate on the next deploy.'}
               </div>
             </div>
             <div className="modal-body">

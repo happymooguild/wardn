@@ -63,7 +63,7 @@ func (a *API) createDashboard(c *gin.Context) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.SignozMetric = strings.TrimSpace(req.SignozMetric)
 	if len(req.Name) < 2 || len(req.Name) > 60 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 2–60 characters"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 2-60 characters"})
 		return
 	}
 	if req.SignozMetric == "" {

@@ -19,7 +19,7 @@ const RANGES = [
 ]
 
 // Renders one dashboard for a selected app: pulls per-version stats for the
-// dashboard's metric and lays them out by kind — 'percentiles' (p99 full,
+// dashboard's metric and lays them out by kind - 'percentiles' (p99 full,
 // p95/p90 half, like Latency) or 'single' (one value per version, like error
 // rate / throughput).
 export default function DashboardView({ cfg, apps, onBack, onAuthError }) {
@@ -59,7 +59,7 @@ export default function DashboardView({ cfg, apps, onBack, onAuthError }) {
   const selVer = selIdx >= 0 ? versions[selIdx] : null
   const prevVer = selIdx > 0 ? versions[selIdx - 1] : null
 
-  const fmt = (v) => (v == null ? '—' : `${v.toFixed(cfg.decimals)}${cfg.unit}`)
+  const fmt = (v) => (v == null ? '-' : `${v.toFixed(cfg.decimals)}${cfg.unit}`)
 
   return (
     <div className="content-inner fade-in">
@@ -96,12 +96,12 @@ export default function DashboardView({ cfg, apps, onBack, onAuthError }) {
 
       {versions.length === 0 ? (
         <div className="empty" style={{ height: 220 }}>
-          No {cfg.name.toLowerCase()} data for {app || 'this app'} yet — fire a deploy marker to populate it.
+          No {cfg.name.toLowerCase()} data for {app || 'this app'} yet - fire a deploy marker to populate it.
         </div>
       ) : (
         <>
           <div className="section-label">
-            SELECTED VERSION · <span style={{ color: 'var(--accent)' }}>{selected || '—'}</span>
+            SELECTED VERSION · <span style={{ color: 'var(--accent)' }}>{selected || '-'}</span>
             <span className="section-hint">click a point on any chart to inspect a version</span>
           </div>
 
@@ -117,7 +117,7 @@ export default function DashboardView({ cfg, apps, onBack, onAuthError }) {
                   <StatTile key={label} label={label} {...deltaProps(cur, prev, fmt, prevVer)} />
                 ))}
               </div>
-              <Panel title={`${cfg.name} by version · p99`} hint="p99 per version — click a point to inspect">
+              <Panel title={`${cfg.name} by version · p99`} hint="p99 per version - click a point to inspect">
                 <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p99" />
               </Panel>
               <div className="chart-row">
@@ -134,7 +134,7 @@ export default function DashboardView({ cfg, apps, onBack, onAuthError }) {
               <div className="tiles">
                 <StatTile label={cfg.name} {...deltaProps(selVer?.p50, prevVer?.p50, fmt, prevVer)} />
               </div>
-              <Panel title={`${cfg.name} by version`} hint={`${cfg.name.toLowerCase()} per version — click a point to inspect`}>
+              <Panel title={`${cfg.name} by version`} hint={`${cfg.name.toLowerCase()} per version - click a point to inspect`}>
                 <VersionChart versions={versions} selected={selected} onSelect={setSelected} series="p50" />
               </Panel>
             </>

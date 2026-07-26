@@ -61,7 +61,7 @@ func renderPrompt(in Input, b Bounds, afterLogs, beforeLogs []logGroup, afterSpa
 	}
 
 	if in.TelemetryError != "" {
-		fmt.Fprintf(&s, "# Logs and traces\n\nUnavailable — could not be fetched from the observability backend (%s). "+
+		fmt.Fprintf(&s, "# Logs and traces\n\nUnavailable - could not be fetched from the observability backend (%s). "+
 			"Reason from the metrics alone, and say in your answer that log and trace evidence was missing.\n\n", in.TelemetryError)
 		return s.String()
 	}
@@ -70,7 +70,7 @@ func renderPrompt(in Input, b Bounds, afterLogs, beforeLogs []logGroup, afterSpa
 	s.WriteString(renderLogs(afterLogs, "No error logs were returned for the after-window."))
 
 	s.WriteString("# Error logs before the deploy (baseline)\n\n")
-	s.WriteString(renderLogs(beforeLogs, "No error logs were returned for the before-window — errors above are likely new."))
+	s.WriteString(renderLogs(beforeLogs, "No error logs were returned for the before-window - errors above are likely new."))
 
 	s.WriteString("# Slowest traces after the deploy\n\n")
 	s.WriteString(renderSpans(afterSpans, "No traces were returned for the after-window."))
@@ -134,7 +134,7 @@ func indentBody(body string) string {
 
 func degradedTag(degraded bool) string {
 	if degraded {
-		return " (DEGRADED — crossed the configured threshold)"
+		return " (DEGRADED - crossed the configured threshold)"
 	}
 	return ""
 }

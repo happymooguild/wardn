@@ -31,7 +31,7 @@ func (s *Store) SaveTelemetry(ctx context.Context, deployID int64, logsBefore, l
 }
 
 // TelemetryForVersion returns the after-window logs and traces of the most
-// recent deploy of a given version — used by the version-compare AI flow.
+// recent deploy of a given version - used by the version-compare AI flow.
 func (s *Store) TelemetryForVersion(ctx context.Context, appID int64, version string) (logsAfter, tracesAfter json.RawMessage, found bool, err error) {
 	row := s.db.QueryRowContext(ctx,
 		`SELECT dt.logs_after, dt.traces_after

@@ -59,7 +59,7 @@ const ITEMS = [
 ]
 
 export default function Sidebar({ user, page, onNavigate, onLogout }) {
-  const name = user?.username ?? '—'
+  const name = user?.username ?? '-'
   const role = user?.role ?? ''
   const initials = name.slice(0, 2).toUpperCase()
   return (

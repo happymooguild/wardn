@@ -2,7 +2,7 @@
 //
 // Provider API keys differ from wardn's own app keys: app keys are only ever
 // compared, so they are stored as a SHA-256 hash. A provider key has to be
-// *used*, so it must be recoverable — which means encryption, not hashing.
+// *used*, so it must be recoverable - which means encryption, not hashing.
 package secret
 
 import (
@@ -16,14 +16,14 @@ import (
 )
 
 // ErrNoKey means WARDN_SECRET_KEY is unset. Callers treat this as "cannot
-// persist credentials" and fall back to env-supplied ones — failing closed
+// persist credentials" and fall back to env-supplied ones - failing closed
 // rather than writing a provider key to Postgres in plaintext.
 var ErrNoKey = errors.New("WARDN_SECRET_KEY is not set; cannot store credentials")
 
 type Box struct{ aead cipher.AEAD }
 
 // NewBox derives an AES-256-GCM key from the passphrase. Any length is
-// accepted — it is hashed to 32 bytes — so operators are not forced to
+// accepted - it is hashed to 32 bytes - so operators are not forced to
 // generate exactly 32 raw bytes.
 func NewBox(passphrase string) (*Box, error) {
 	if passphrase == "" {

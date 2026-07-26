@@ -14,7 +14,7 @@ const PAGE_META = {
   home: { title: 'Home', sub: 'what wardn can do, and how your apps are doing right now' },
   dashboards: { title: 'Dashboards', sub: 'per-version metrics from SigNoz, snapshotted around each deploy' },
   deploys: { title: 'Deploys', sub: 'deploy markers and before/after analysis' },
-  askai: { title: 'Ask AI', sub: 'compare two versions — metrics, logs and traces, explained' },
+  askai: { title: 'Ask AI', sub: 'compare two versions - metrics, logs and traces, explained' },
   alerting: { title: 'Alerting', sub: 'regression alerts and delivery channels' },
   ai: { title: 'AI Settings', sub: 'provider credentials and automatic root-cause analysis' },
   explore: { title: 'Explore', sub: 'everything wardn can do, in one place' },
@@ -37,7 +37,7 @@ export default function App() {
       .finally(() => setChecking(false))
   }, [])
 
-  // A 401 from any data call means the session lapsed — bounce to login.
+  // A 401 from any data call means the session lapsed - bounce to login.
   const onAuthError = (e) => {
     if (String(e).includes('401')) setUser(null)
     else setError(String(e))

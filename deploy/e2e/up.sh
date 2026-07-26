@@ -6,7 +6,7 @@
 #   ./up.sh --no-signoz     # skip SigNoz (analyzer will no-op; marker/alert UI still work)
 #   ./up.sh --no-build      # reuse already-loaded images
 #
-# Heads-up: the full stack wants ~6–8 GB of free RAM (SigNoz runs ClickHouse).
+# Heads-up: the full stack wants ~6-8 GB of free RAM (SigNoz runs ClickHouse).
 set -euo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
@@ -43,7 +43,7 @@ kind load docker-image --name "$CLUSTER" wardn-backend:dev wardn-frontend:dev wa
 # ---- SigNoz ----
 SIGNOZ_URL=""; OTLP_ENDPOINT=""; SIGNOZ_API_KEY=""
 if [ "$WITH_SIGNOZ" = 1 ]; then
-  log "installing SigNoz (this is the slow part — ClickHouse + collector)"
+  log "installing SigNoz (this is the slow part - ClickHouse + collector)"
   helm repo add signoz https://charts.signoz.io >/dev/null 2>&1 || true
   helm repo update signoz >/dev/null 2>&1 || true
   kubectl create namespace signoz --dry-run=client -o yaml | kubectl apply -f - >/dev/null
@@ -56,14 +56,14 @@ if [ "$WITH_SIGNOZ" = 1 ]; then
     sleep 5
   done
   QUERY_SVC="$(find_svc signoz 'query|^signoz$')"
-  [ -n "${OTLP_SVC:-}" ]  || { warn "couldn't find the SigNoz collector svc — defaulting"; OTLP_SVC="signoz-otel-collector"; }
-  [ -n "${QUERY_SVC:-}" ] || { warn "couldn't find the SigNoz query svc — defaulting";     QUERY_SVC="signoz-query-service"; }
+  [ -n "${OTLP_SVC:-}" ]  || { warn "couldn't find the SigNoz collector svc - defaulting"; OTLP_SVC="signoz-otel-collector"; }
+  [ -n "${QUERY_SVC:-}" ] || { warn "couldn't find the SigNoz query svc - defaulting";     QUERY_SVC="signoz-query-service"; }
   OTLP_ENDPOINT="http://${OTLP_SVC}.signoz.svc.cluster.local:4318"
   SIGNOZ_URL="http://${QUERY_SVC}.signoz.svc.cluster.local:8080"
   log "SigNoz OTLP=$OTLP_ENDPOINT  query=$SIGNOZ_URL  (verify with: kubectl -n signoz get svc)"
 
-  # CRITICAL: SigNoz will not register its otel-collector — so the OTLP receiver
-  # never binds and no metrics are ingested — until a first org/admin exists.
+  # CRITICAL: SigNoz will not register its otel-collector - so the OTLP receiver
+  # never binds and no metrics are ingested - until a first org/admin exists.
   # Create one via its API (retries until the query service is ready).
   log "creating SigNoz admin/org (required before it accepts metrics)"
   kubectl -n signoz port-forward "svc/${QUERY_SVC}" 18080:8080 >/tmp/wardn-sz-pf.log 2>&1 &
@@ -79,7 +79,7 @@ if [ "$WITH_SIGNOZ" = 1 ]; then
     fi
     sleep 10
   done
-  [ "$SZ_DONE" = 1 ] || warn "SigNoz registration didn't complete — sign up at the SigNoz UI so it accepts metrics"
+  [ "$SZ_DONE" = 1 ] || warn "SigNoz registration didn't complete - sign up at the SigNoz UI so it accepts metrics"
 
   # The analyzer queries SigNoz's API, which requires an API key (SIGNOZ-API-KEY
   # header). Self-hosted SigNoz (v0.133) has no static key: mint one via a
@@ -109,7 +109,7 @@ if [ "$WITH_SIGNOZ" = 1 ]; then
         curl -s -o /dev/null -X POST "$B/api/v1/service_accounts/$SAID/roles" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' -d "{\"id\":\"$ADMIN_ROLE\"}" || true
         # A key's secret is returned only at creation and re-creating a name 409s,
-        # so use a unique name each run — the analyzer just needs one working key.
+        # so use a unique name each run - the analyzer just needs one working key.
         SIGNOZ_API_KEY="$(curl -s -X POST "$B/api/v1/service_accounts/$SAID/keys" \
           -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
           -d "{\"name\":\"wardn-analyzer-key-$(date +%s)\",\"expiresAt\":0}" \
@@ -117,7 +117,7 @@ if [ "$WITH_SIGNOZ" = 1 ]; then
       fi
     fi
     [ -n "$SIGNOZ_API_KEY" ] && log "SigNoz analyzer key minted" \
-      || warn "couldn't mint a SigNoz API key — the analyzer will report 'metrics provider not configured'"
+      || warn "couldn't mint a SigNoz API key - the analyzer will report 'metrics provider not configured'"
   fi
   kill "$SZPF" 2>/dev/null || true
 fi
@@ -137,7 +137,7 @@ helm upgrade --install wardn "$REPO_ROOT/deploy/helm/wardn" \
   --set backend.secretKey="$WARDN_SECRET_KEY" \
   --set sampleApp.otlpEndpoint="$OTLP_ENDPOINT" \
   --wait --timeout 5m
-log "wardn is up — dashboard http://localhost:8088  (admin / admin@12345)"
+log "wardn is up - dashboard http://localhost:8088  (admin / admin@12345)"
 
 # ---- Gitea + ArgoCD ----
 if [ "$WITH_ARGOCD" = 1 ]; then

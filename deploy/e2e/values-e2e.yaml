@@ -1,12 +1,12 @@
 # Helm overrides for the in-cluster end-to-end run.
 #
 # SigNoz URLs (backend.signozUrl, sampleApp.otlpEndpoint) are injected by up.sh
-# with --set once the SigNoz service names are discovered — they are not pinned
+# with --set once the SigNoz service names are discovered - they are not pinned
 # here because they vary by SigNoz chart version.
 
 app:
   services:
-    # Dashboard demo services — each gets a live emitter (chart sample-app).
+    # Dashboard demo services - each gets a live emitter (chart sample-app).
     - name: checkout-service
       apiKey: wardn_dev_key_checkout
       baseLatencyMs: "60"
@@ -14,7 +14,7 @@ app:
       apiKey: wardn_dev_key_payments
       baseLatencyMs: "95"
     # The app OBSERVED via SigNoz + ArgoCD. Registered here (so its key exists and
-    # signoz_service_name = "storefront"), but NOT deployed by the chart — ArgoCD
+    # signoz_service_name = "storefront"), but NOT deployed by the chart - ArgoCD
     # deploys it from Gitea instead.
     - name: storefront
       apiKey: wardn_dev_key_storefront
@@ -24,5 +24,5 @@ app:
 backend:
   # Short windows so a marker's before/after analysis finishes quickly on stage.
   # (per-app window_seconds / analysis_delay_seconds live in the DB; override via
-  # SQL if you want them even shorter — see the README.)
+  # SQL if you want them even shorter - see the README.)
   publicBaseUrl: http://localhost:8088

@@ -44,7 +44,7 @@ type Provider interface {
 	Analyze(ctx context.Context, req Request) (Result, error)
 }
 
-// ErrPermanent marks a failure that retrying cannot fix — a bad API key, a
+// ErrPermanent marks a failure that retrying cannot fix - a bad API key, a
 // revoked credential, an unknown model. Without this the job machinery would
 // burn its full retry budget re-sending a request the provider has already
 // rejected on its merits.
@@ -64,7 +64,7 @@ func permanentStatus(code int) bool {
 }
 
 // ErrRefused means the model's safety classifiers declined the request. It is a
-// terminal outcome, not a transport failure — retrying the same payload will
+// terminal outcome, not a transport failure - retrying the same payload will
 // fail the same way, so the worker records it rather than re-queueing.
 type ErrRefused struct {
 	Category    string
@@ -84,7 +84,7 @@ func (e *ErrRefused) Error() string {
 // VerdictSchema is the JSON Schema handed to the provider's structured-output
 // mode. Kept in one place so both adapters constrain the model identically.
 func VerdictSchema() map[string]any {
-	// NB: no maxItems — Anthropic's output_config.format.schema rejects it on
+	// NB: no maxItems - Anthropic's output_config.format.schema rejects it on
 	// arrays. The cap is stated in the description instead, which the model honors.
 	strArray := func(desc string, maxItems int) map[string]any {
 		return map[string]any{

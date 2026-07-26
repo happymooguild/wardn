@@ -18,4 +18,4 @@ helm upgrade wardn "$REPO_ROOT/deploy/helm/wardn" \
   --set sampleApp.regressed="$VAL" \
   --wait
 
-echo "==> Done — watch the dashboard's latency line."
+echo "==> Done - watch the dashboard's latency line."

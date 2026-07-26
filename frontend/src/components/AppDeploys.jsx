@@ -78,7 +78,7 @@ export default function AppDeploys({ appName, onBack, onAuthError }) {
           <div className="panel-body" style={{ padding: 0 }}>
             {deploys.length === 0 ? (
               <div className="empty" style={{ height: 160 }}>
-                No deploy markers yet — POST /api/v1/deployments
+                No deploy markers yet - POST /api/v1/deployments
               </div>
             ) : (
               <table className="data-table">
@@ -116,7 +116,7 @@ export default function AppDeploys({ appName, onBack, onAuthError }) {
             <span className="panel-title">
               Detail ·{' '}
               <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
-                {detail?.deploy?.version || '—'}
+                {detail?.deploy?.version || '-'}
               </span>
             </span>
           </div>
@@ -131,7 +131,7 @@ export default function AppDeploys({ appName, onBack, onAuthError }) {
                   <Meta label="Previous" value={detail.deploy.previous_version || 'baseline'} />
                   <Meta label="Environment" value={detail.deploy.environment} />
                   <Meta label="Status" value={detail.deploy.status} />
-                  <Meta label="Failure" value={detail.deploy.failure_reason || '—'} />
+                  <Meta label="Failure" value={detail.deploy.failure_reason || '-'} />
                 </div>
                 <div className="section-label" style={{ marginTop: 18 }}>
                   BEFORE / AFTER SNAPSHOTS
@@ -155,7 +155,7 @@ export default function AppDeploys({ appName, onBack, onAuthError }) {
                         </div>
                         <div className="snap-row">
                           <span>delta</span>
-                          <b>{s.delta_pct != null ? `${s.delta_pct.toFixed(1)}%` : '—'}</b>
+                          <b>{s.delta_pct != null ? `${s.delta_pct.toFixed(1)}%` : '-'}</b>
                         </div>
                       </div>
                     ))}
@@ -192,7 +192,7 @@ function Meta({ label, value }) {
 }
 
 function formatTime(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   try {
     return new Date(iso).toLocaleString()
   } catch {
@@ -201,6 +201,6 @@ function formatTime(iso) {
 }
 
 function fmtNum(v) {
-  if (v == null) return '—'
+  if (v == null) return '-'
   return typeof v === 'number' ? v.toFixed(2) : String(v)
 }

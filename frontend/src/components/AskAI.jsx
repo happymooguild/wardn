@@ -1,7 +1,7 @@
 // The "Ask AI" panel on a deploy's detail view (design-doc §8).
 //
 // The analysis is queued server-side and polled, because the model call runs
-// for tens of seconds — long enough that a synchronous request would look hung.
+// for tens of seconds - long enough that a synchronous request would look hung.
 import { useEffect, useRef, useState } from 'react'
 import { requestAnalysis, fetchAnalysis } from '../api.js'
 
@@ -145,10 +145,10 @@ function Verdict({ analysis }) {
           indistinguishable from a thin signal. */}
       <div className="ai-stats muted">
         {stats.telemetry_missing
-          ? 'Logs and traces were unavailable — this verdict is based on metrics alone.'
+          ? 'Logs and traces were unavailable - this verdict is based on metrics alone.'
           : `Saw ${stats.logs_sent_after ?? 0} of ${stats.logs_available_after ?? 0} error logs and ` +
             `${stats.traces_sent_after ?? 0} of ${stats.traces_available_after ?? 0} traces from the after-window.`}
-        {stats.ceiling_hit ? ' Context ceiling hit — the sample was trimmed further.' : ''}
+        {stats.ceiling_hit ? ' Context ceiling hit - the sample was trimmed further.' : ''}
         {analysis.input_tokens != null &&
           ` ${analysis.input_tokens} in / ${analysis.output_tokens} out tokens.`}
       </div>

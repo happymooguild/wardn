@@ -89,7 +89,7 @@ export default function AskAIPage({ apps, onAuthError }) {
       <div className="panel">
         <div className="panel-body">
           {versions.length < 1 ? (
-            <div className="empty" style={{ height: 120 }}>No versions yet — deploy this service to compare.</div>
+            <div className="empty" style={{ height: 120 }}>No versions yet - deploy this service to compare.</div>
           ) : (
             <div className="compare-controls">
               <label className="field-label">
@@ -143,7 +143,7 @@ export default function AskAIPage({ apps, onAuthError }) {
                     <td className="mono">{fmt(m.a, m.unit)}</td>
                     <td className="mono">{fmt(m.b, m.unit)}</td>
                     <td className={m.degraded ? 'delta-bad' : 'muted'}>
-                      {m.delta_pct != null ? `${m.delta_pct > 0 ? '+' : ''}${m.delta_pct.toFixed(1)}%` : '—'}
+                      {m.delta_pct != null ? `${m.delta_pct > 0 ? '+' : ''}${m.delta_pct.toFixed(1)}%` : '-'}
                       {m.degraded ? ' ▲' : ''}
                     </td>
                   </tr>
@@ -205,5 +205,5 @@ export default function AskAIPage({ apps, onAuthError }) {
 }
 
 function fmt(v, unit) {
-  return v == null ? '—' : `${v.toFixed(1)}${unit || ''}`
+  return v == null ? '-' : `${v.toFixed(1)}${unit || ''}`
 }

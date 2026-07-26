@@ -2,7 +2,7 @@
 // so the dashboard has a populated version-comparison chart to show and click
 // into immediately (rather than waiting for the live emitter to accumulate one).
 //
-// The versions are spread across time — from ~half a day to ~200 days ago — so
+// The versions are spread across time - from ~half a day to ~200 days ago - so
 // the dashboard's time-range selector has something to reveal: short windows show
 // only recent versions, long windows show the whole history.
 package seed

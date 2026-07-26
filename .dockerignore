@@ -1,4 +1,4 @@
-# Backend image build context is the repo root now — exclude everything that
+# Backend image build context is the repo root now - exclude everything that
 # isn't the Go backend so the context stays small.
 frontend
 demo/sample-app

@@ -50,4 +50,4 @@ wait_rollout argocd argocd-server 420s
 wait_rollout argocd argocd-notifications-controller 300s || warn "notifications controller not ready yet"
 kubectl -n argocd rollout restart deploy/argocd-notifications-controller >/dev/null 2>&1 || true
 kubectl apply -f "$E2E_DIR/argocd/application.yaml" >/dev/null
-log "ArgoCD Application 'storefront' created — it will sync the demo app from Gitea"
+log "ArgoCD Application 'storefront' created - it will sync the demo app from Gitea"

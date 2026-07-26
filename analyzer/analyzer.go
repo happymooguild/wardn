@@ -100,7 +100,7 @@ func (w *Worker) tick(ctx context.Context) {
 	}
 
 	// Out of retries. Which record gets marked failed depends on the job kind:
-	// an exhausted AI job must not mark the deploy itself failed — the deploy's
+	// an exhausted AI job must not mark the deploy itself failed - the deploy's
 	// verdict came from the metrics pass and is still valid.
 	reason := perr.Error()
 	if job.Kind == store.JobKindAI {
@@ -130,7 +130,7 @@ func (w *Worker) ingestVersionMetrics(ctx context.Context, app store.App, deploy
 	}
 	for _, m := range metrics {
 		// Filter by the deploy's exact version so we pull only this version's
-		// samples — never a prior version's stale series carried forward by the
+		// samples - never a prior version's stale series carried forward by the
 		// query engine into our window. (Marker version == emitted service version.)
 		promql := fmt.Sprintf(`%s{service_name=%q,version=%q}`, m.SignozMetric, app.SignozServiceName, deploy.Version)
 		series, err := w.Metrics.QuerySeries(ctx, promql, start, end, 5) // ~native scrape resolution
@@ -285,7 +285,7 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 	// Feed the per-version dashboards (latency, error rate, throughput) straight
 	// from SigNoz: pull each metric's raw samples for the after-window and store
 	// them keyed by the deploy's version. Postgres then computes the per-version
-	// stats. This replaces the old continuous sample-app push — wardn only reads
+	// stats. This replaces the old continuous sample-app push - wardn only reads
 	// SigNoz, and only around markers.
 	w.ingestVersionMetrics(ctx, app, deploy, afterStart, afterEnd)
 
@@ -334,7 +334,7 @@ func (w *Worker) process(ctx context.Context, job store.AnalysisJob, deploy stor
 			w.Alerts.NotifyRegression(ctx, app, deploy, snapshots)
 		}
 		// Per design-doc §4: automatic root-cause runs on a regression only
-		// when the app opted in. Enqueue failures are logged, not returned —
+		// when the app opted in. Enqueue failures are logged, not returned -
 		// the metrics verdict is already written and must not be undone by a
 		// retry of this job.
 		if app.AIEnabled && w.AI != nil {

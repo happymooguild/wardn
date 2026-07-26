@@ -102,7 +102,7 @@ type DashboardMetric struct {
 	SignozMetric string
 }
 
-// DashboardMetrics returns the distinct metrics to snapshot per version — the
+// DashboardMetrics returns the distinct metrics to snapshot per version - the
 // union across all dashboards. Drives the analyzer's per-version pull.
 func (s *Store) DashboardMetrics(ctx context.Context) ([]DashboardMetric, error) {
 	rows, err := s.db.QueryContext(ctx,

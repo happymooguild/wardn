@@ -38,7 +38,7 @@ services:
       ANALYZER_POLL_INTERVAL: 5s
       CLOCK_SKEW_MAX: 24h
       # AI root-cause analysis (optional). Either set a key here, or configure
-      # one in the UI under AI Settings — WARDN_SECRET_KEY is what lets the UI
+      # one in the UI under AI Settings - WARDN_SECRET_KEY is what lets the UI
       # store it encrypted.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -76,7 +76,7 @@ services:
     depends_on:
       - wardn-backend
 
-  # Second service — a distinct app the dashboard can switch to.
+  # Second service - a distinct app the dashboard can switch to.
   wardn-sample-app-payments:
     build: ./demo/sample-app
     environment:

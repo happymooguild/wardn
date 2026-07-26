@@ -60,7 +60,7 @@ export default function AddAppModal({ onClose, onCreate, onCreated }) {
         '  -d \'{"app":"' + app + '","version":"v1.0.0","environment":"production","source":"ci"}\'',
       ].join('\n'),
       github: [
-        '# .github/workflows/deploy.yml — a step AFTER your rollout succeeds.',
+        '# .github/workflows/deploy.yml - a step AFTER your rollout succeeds.',
         '# Store the key as a repo secret named WARDN_API_KEY.',
         '- name: Notify wardn of deploy',
         '  env:',
@@ -128,7 +128,7 @@ export default function AddAppModal({ onClose, onCreate, onCreated }) {
                 spellCheck={false}
               />
               <div className="modal-sub" style={{ marginTop: -4 }}>
-                3–64 chars · lowercase letters, digits and hyphens
+                3-64 chars · lowercase letters, digits and hyphens
               </div>
               {err && <div className="modal-err">{err}</div>}
               <div className="modal-actions">
@@ -150,7 +150,7 @@ export default function AddAppModal({ onClose, onCreate, onCreated }) {
           <>
             <div className="modal-head">
               <div className="modal-title">“{result.app.name}” created</div>
-              <div className="modal-sub">Copy the API key now — it won’t be shown again.</div>
+              <div className="modal-sub">Copy the API key now - it won’t be shown again.</div>
             </div>
             <div className="modal-body">
               <div className="key-reveal">
@@ -160,7 +160,7 @@ export default function AddAppModal({ onClose, onCreate, onCreated }) {
                 </button>
               </div>
               <div className="key-warn">
-                <b>Store it securely.</b> wardn only keeps a hash — send it as{' '}
+                <b>Store it securely.</b> wardn only keeps a hash - send it as{' '}
                 <code>Authorization: Bearer &lt;key&gt;</code> on every deploy marker.
               </div>
 

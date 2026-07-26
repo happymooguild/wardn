@@ -21,7 +21,7 @@ func scanAIProvider(scanner interface {
 }
 
 // EnabledAIProvider returns the active provider's metadata. The API key is
-// deliberately not included — use AIProviderKey when you need to make a call.
+// deliberately not included - use AIProviderKey when you need to make a call.
 func (s *Store) EnabledAIProvider(ctx context.Context) (AIProvider, error) {
 	row := s.db.QueryRowContext(ctx,
 		`SELECT `+aiProviderCols+` FROM ai_providers WHERE enabled ORDER BY updated_at DESC LIMIT 1`)
@@ -101,7 +101,7 @@ func scanAnalysis(scanner interface {
 }
 
 // CreateAnalysis records a pending analysis and enqueues the job that will
-// fulfil it, in one transaction — so a row is never left pending with no job
+// fulfil it, in one transaction - so a row is never left pending with no job
 // to advance it.
 func (s *Store) CreateAnalysis(ctx context.Context, deployID int64, trigger string) (Analysis, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -231,7 +231,7 @@ func (s *Store) CompleteAnalysis(ctx context.Context, id int64, r AnalysisResult
 }
 
 // FailAnalysis records a terminal failure. status is 'failed' for an error the
-// operator can fix, or 'refused' when the model's safety layer declined —
+// operator can fix, or 'refused' when the model's safety layer declined -
 // which is not retryable and shouldn't read as a bug.
 func (s *Store) FailAnalysis(ctx context.Context, id int64, status, message string, contextStats any) error {
 	stats, err := json.Marshal(contextStats)

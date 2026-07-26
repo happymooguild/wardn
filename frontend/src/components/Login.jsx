@@ -62,7 +62,7 @@ export default function Login({ onSuccess }) {
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
 
-        <div className="login-hint">Dev login — admin / admin@12345</div>
+        <div className="login-hint">Dev login - admin / admin@12345</div>
       </form>
     </div>
   )

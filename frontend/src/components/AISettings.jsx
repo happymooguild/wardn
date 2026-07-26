@@ -1,7 +1,7 @@
 // AI provider setup: plug in an API key, pick a model, verify it works, and
 // choose which services get automatic analysis on a regression.
 //
-// The key is write-only over the API — the server returns only its last four
+// The key is write-only over the API - the server returns only its last four
 // characters, so this page can show which key is installed without ever
 // receiving it back.
 import { useEffect, useState } from 'react'
@@ -202,7 +202,7 @@ export default function AISettings({ apps, onAppsChanged, onAuthError }) {
                   value={apiKey}
                   placeholder={
                     state?.provider?.key_last4 && state.source === 'database'
-                      ? `stored — ends in ${state.provider.key_last4}`
+                      ? `stored - ends in ${state.provider.key_last4}`
                       : 'sk-…'
                   }
                   onChange={(e) => setApiKey(e.target.value)}
