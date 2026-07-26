@@ -12,6 +12,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/wardn-backend .
 
 # ---- run ----
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/happymooguild/wardn" \
+      org.opencontainers.image.title="wardn-backend" \
+      org.opencontainers.image.description="wardn backend: deploy-marker API, SigNoz-backed analyzer, alerting"
 COPY --from=build /out/wardn-backend /wardn-backend
 EXPOSE 8080
 USER nonroot:nonroot

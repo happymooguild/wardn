@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wardn.frontend.fullname" . }}
+  labels:
+    {{- include "wardn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+data:
+  # Overrides the image's baked default.conf so /api proxies to this release's
+  # backend Service (rather than a hard-coded name), enabling multiple releases.
+  default.conf: |
+    server {
+        listen       80;
+        server_name  _;
+
+        root   /usr/share/nginx/html;
+        index  index.html;
+
+        location /api/ {
+            proxy_pass         http://{{ include "wardn.backend.fullname" . }}:{{ .Values.backend.service.port }};
+            proxy_http_version 1.1;
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }

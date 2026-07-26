@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wardn.backend.fullname" . }}
+  labels:
+    {{- include "wardn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "wardn.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "wardn.labels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+      annotations:
+        {{- if not .Values.existingSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.backend.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "wardn.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: {{ include "wardn.image" (dict "img" .Values.backend.image "ctx" $) }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.service.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.backend.service.port | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: database-url
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: session-secret
+            - name: SEED_ADMIN_USER
+              value: {{ .Values.auth.adminUser | quote }}
+            - name: SEED_ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: admin-password
+            # Metrics are pulled from SigNoz around deploy markers, so the
+            # synthetic multi-version seed stays off.
+            - name: SEED_DEMO
+              value: "false"
+            {{- $pairs := list -}}
+            {{- range .Values.seedApps -}}{{- $pairs = append $pairs (printf "%s:%s" .name .key) -}}{{- end }}
+            - name: SEED_APPS
+              # A single space means "seed nothing" (an empty value would trigger
+              # the backend's built-in demo default).
+              value: {{ (join "," $pairs) | default " " | quote }}
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.backend.publicBaseUrl | quote }}
+            - name: ALLOW_LOCAL_WEBHOOKS
+              value: {{ .Values.backend.allowLocalWebhooks | quote }}
+            - name: ANALYZER_POLL_INTERVAL
+              value: {{ .Values.backend.analyzerPollInterval | quote }}
+            - name: CLOCK_SKEW_MAX
+              value: {{ .Values.backend.clockSkewMax | quote }}
+            - name: SIGNOZ_URL
+              value: {{ .Values.signoz.url | quote }}
+            - name: SIGNOZ_UI_URL
+              value: {{ .Values.signoz.uiUrl | quote }}
+            - name: SIGNOZ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: signoz-api-key
+            - name: AI_PROVIDER
+              value: {{ .Values.ai.provider | quote }}
+            - name: AI_MODEL
+              value: {{ .Values.ai.model | quote }}
+            - name: AI_BASE_URL
+              value: {{ .Values.ai.baseUrl | quote }}
+            - name: AI_TIMEOUT
+              value: {{ .Values.ai.timeout | quote }}
+            - name: AI_MAX_CONTEXT_CHARS
+              value: {{ .Values.ai.maxContextChars | quote }}
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: ai-api-key
+            - name: WARDN_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wardn.secretName" . }}
+                  key: wardn-secret-key
+            {{- with .Values.backend.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wardn.backend.fullname" . }}
+  labels:
+    {{- include "wardn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    {{- include "wardn.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: {{ .Values.backend.service.port }}
+      targetPort: http

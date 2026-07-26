@@ -1,0 +1,208 @@
+# Default values for wardn.
+# This is a YAML-formatted file. Override any of these with `--set key=value`
+# or your own `-f my-values.yaml`.
+
+# -- Registry prepended to every image.repository that does not already carry a
+# host. Handy for mirroring all images through one private registry.
+global:
+  imageRegistry: ""
+
+# -- Image pull secrets applied to every pod (names of existing docker-registry Secrets).
+imagePullSecrets: []
+# - name: my-registry-cred
+
+# -- Override the chart name in resource names.
+nameOverride: ""
+# -- Override the full generated resource-name prefix (default: <release>-wardn).
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount for the workloads.
+  create: true
+  # -- Name of the ServiceAccount; generated if empty.
+  name: ""
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Backend - the API server, deploy-marker endpoint, analyzer worker, alerting.
+# ---------------------------------------------------------------------------
+backend:
+  image:
+    # -- These images are built from the repo (see the chart README). Point them
+    # at wherever you push them, or override the tag to pin a release.
+    repository: ghcr.io/happymooguild/wardn-backend
+    # -- Image tag. Defaults to the chart appVersion when left empty.
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  service:
+    port: 8080
+
+  # -- Base URL the dashboard is reached at. Used to build links in Slack /
+  # webhook alerts. Set this to your Ingress host in production.
+  publicBaseUrl: "http://localhost:8088"
+  # -- Allow webhook alert targets that resolve to localhost / private ranges.
+  # Keep false in production so a stored webhook can't be pointed at cluster-internal services.
+  allowLocalWebhooks: false
+  # -- Interval the analyzer claims queued analysis jobs.
+  analyzerPollInterval: "5s"
+  # -- How far a marker's client timestamp may drift from server time.
+  clockSkewMax: "24h"
+
+  resources: {}
+    # requests:
+    #   cpu: 50m
+    #   memory: 64Mi
+    # limits:
+    #   cpu: 500m
+    #   memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  # The backend image is distroless-nonroot, so it runs unprivileged safely.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    fsGroup: 65532
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+  # -- Extra environment variables passed straight through to the backend.
+  extraEnv: []
+  # - name: SOME_FLAG
+  #   value: "1"
+
+# ---------------------------------------------------------------------------
+# Frontend - the SPA dashboard, served by nginx which reverse-proxies /api to
+# the backend Service.
+# ---------------------------------------------------------------------------
+frontend:
+  image:
+    repository: ghcr.io/happymooguild/wardn-frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  service:
+    # -- ClusterIP (use Ingress), NodePort, or LoadBalancer.
+    type: ClusterIP
+    port: 80
+    # -- Only used when type is NodePort.
+    nodePort: ""
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  # Stock nginx binds :80 and writes its pid/cache as root, so no nonroot
+  # context is forced here. Swap in an unprivileged nginx image to harden it.
+  podSecurityContext: {}
+  securityContext: {}
+
+# ---------------------------------------------------------------------------
+# Ingress for the frontend (the frontend proxies /api to the backend, so a
+# single host serves both the UI and the API).
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+  hosts:
+    - host: wardn.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: wardn-tls
+  #   hosts:
+  #     - wardn.example.com
+
+# ---------------------------------------------------------------------------
+# Postgres - wardn's own store (deploy events, before/after snapshots, logs &
+# traces, AI analyses, dashboards, RBAC, alert configs).
+# ---------------------------------------------------------------------------
+postgres:
+  # -- Deploy a Postgres inside the release. Set false to use externalDatabase.
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    username: wardn
+    database: wardn
+    # -- Password. Left empty, a strong one is generated and kept stable across upgrades.
+    password: ""
+  persistence:
+    # -- Keep data across pod restarts on a PersistentVolumeClaim. Disable for
+    # an ephemeral emptyDir (data lost on restart - only for kicking the tyres).
+    enabled: true
+    storageClass: ""
+    size: 8Gi
+    accessModes:
+      - ReadWriteOnce
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -- Used only when postgres.enabled is false. A full Postgres connection string.
+externalDatabase:
+  # url: "postgres://user:pass@host:5432/wardn?sslmode=require"
+  url: ""
+
+# ---------------------------------------------------------------------------
+# SigNoz - where wardn reads metrics, logs and traces from. Leave url empty and
+# the marker + dashboard UI still work; the analyzer fails jobs until it's set.
+# ---------------------------------------------------------------------------
+signoz:
+  # -- SigNoz query URL, e.g. http://signoz.signoz.svc.cluster.local:8080
+  url: ""
+  # -- A minted SigNoz service-account API key (SIGNOZ-API-KEY).
+  apiKey: ""
+  # -- Optional SigNoz UI base URL, used for deep links from wardn.
+  uiUrl: ""
+
+# ---------------------------------------------------------------------------
+# AI root-cause. Optional. Leave apiKey empty to configure a provider from the
+# UI instead (AI Settings) - the chart always sets an encryption key so
+# UI-stored credentials can be saved.
+# ---------------------------------------------------------------------------
+ai:
+  # -- anthropic | openai | gemini. Inferred from the key when left empty.
+  provider: ""
+  # -- Model id. Defaults per provider (anthropic -> claude-opus-4-8).
+  model: ""
+  # -- Provider API key. Prefer setting this via existingSecret in production.
+  apiKey: ""
+  # -- Optional base URL for a proxy / compatible gateway.
+  baseUrl: ""
+  timeout: "120s"
+  maxContextChars: "60000"
+  # -- Passphrase that encrypts UI-stored AI keys at rest (AES-256-GCM). Left
+  # empty, a stable one is generated so the "Save" flow works out of the box.
+  secretKey: ""
+
+# ---------------------------------------------------------------------------
+# Initial admin login. CHANGE THE PASSWORD before exposing wardn.
+# ---------------------------------------------------------------------------
+auth:
+  adminUser: "admin"
+  adminPassword: "admin@12345"
+  # -- Cookie-signing secret. Generated and kept stable across upgrades if empty.
+  sessionSecret: ""
+
+# -- Register services on boot as `name`/`key` pairs. Optional: most users add
+# apps from the UI (which mints keys). Empty means nothing is pre-seeded.
+seedApps: []
+# - name: checkout-service
+#   key: replace-with-a-strong-key
+
+# -- Supply every secret yourself instead of letting the chart create one. The
+# Secret must contain: database-url, postgres-password, session-secret,
+# wardn-secret-key, ai-api-key, signoz-api-key, admin-password.
+existingSecret: ""

@@ -1,0 +1,60 @@
+wardn is installed as release {{ .Release.Name | quote }} in namespace {{ .Release.Namespace | quote }}.
+
+1. Reach the dashboard
+{{- if .Values.ingress.enabled }}
+
+   Ingress is enabled. Once DNS resolves, open:
+   {{- range .Values.ingress.hosts }}
+     http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+   {{- end }}
+{{- else if eq .Values.frontend.service.type "NodePort" }}
+
+   NodePort service. Get the URL with:
+     export NODE_IP=$(kubectl get nodes -o jsonpath="{.items[0].status.addresses[0].address}")
+     export NODE_PORT=$(kubectl get svc {{ include "wardn.frontend.fullname" . }} -n {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}")
+     echo "http://$NODE_IP:$NODE_PORT"
+{{- else if eq .Values.frontend.service.type "LoadBalancer" }}
+
+   LoadBalancer service. Watch for the external IP:
+     kubectl get svc {{ include "wardn.frontend.fullname" . }} -n {{ .Release.Namespace }} -w
+{{- else }}
+
+   ClusterIP service (no Ingress). Port-forward to try it locally:
+     kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "wardn.frontend.fullname" . }} 8088:{{ .Values.frontend.service.port }}
+     open http://localhost:8088
+{{- end }}
+
+2. Log in
+   User: {{ .Values.auth.adminUser }}
+   {{- if eq .Values.auth.adminPassword "admin@12345" }}
+   Password: admin@12345   <-- CHANGE THIS. Re-run helm upgrade with
+                               --set auth.adminPassword=... before exposing wardn.
+   {{- else }}
+   Password: (the auth.adminPassword you set)
+   {{- end }}
+
+3. Connect SigNoz (for the analyzer)
+{{- if .Values.signoz.url }}
+   SigNoz URL configured: {{ .Values.signoz.url }}
+{{- else }}
+   No SigNoz URL set - the marker + dashboard UI work, but analysis jobs fail
+   until you configure it:
+     helm upgrade {{ .Release.Name }} wardn/wardn -n {{ .Release.Namespace }} \
+       --set signoz.url=http://signoz.signoz.svc.cluster.local:8080 \
+       --set signoz.apiKey=<minted-service-account-key>
+{{- end }}
+
+4. Send a deploy marker (from your CI or ArgoCD)
+   curl -fsS -X POST http{{ if .Values.ingress.tls }}s{{ end }}://<wardn-host>/api/v1/deployments \
+     -H "Authorization: Bearer <per-app API key from the UI>" \
+     -H 'Content-Type: application/json' \
+     -d '{"app":"checkout","version":"v1.4.2","environment":"production","source":"ci"}'
+
+{{- if not .Values.existingSecret }}
+
+Generated credentials live in Secret {{ include "wardn.secretName" . }}. Read one with:
+   kubectl get secret {{ include "wardn.secretName" . }} -n {{ .Release.Namespace }} \
+     -o jsonpath="{.data.session-secret}" | base64 -d
+{{- end }}
+
+Docs: https://github.com/happymooguild/wardn
