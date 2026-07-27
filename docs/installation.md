@@ -6,7 +6,8 @@ the same public images:
 
 - `ghcr.io/happymooguild/wardn-backend`
 - `ghcr.io/happymooguild/wardn-frontend`
-- chart: `oci://ghcr.io/happymooguild/charts/wardn`
+- chart: `oci://ghcr.io/happymooguild/charts/wardn` (also listed on
+  [Artifact Hub](https://artifacthub.io/packages/helm/wardn/wardn))
 
 - [Prerequisites](#prerequisites)
 - [Option A - Docker Compose](#option-a---docker-compose-local)

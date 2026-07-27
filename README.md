@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/happymooguild/wardn"><img alt="status" src="https://img.shields.io/badge/status-active-63d397?style=flat-square"></a>
+  <a href="https://artifacthub.io/packages/helm/wardn/wardn"><img alt="Artifact Hub" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/wardn&style=flat-square"></a>
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white">
   <img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat-square&logo=kubernetes&logoColor=white">
   <img alt="SigNoz" src="https://img.shields.io/badge/powered%20by-SigNoz-e34e2f?style=flat-square">
@@ -108,8 +109,9 @@ still work; analyzer jobs fail until SigNoz is configured.
 
 ### Kubernetes (Helm)
 
-The chart is published to GHCR as an OCI artifact - no cloning or image
-building needed. It provisions the backend, dashboard, and (by default) a
+The chart is published to GHCR as an OCI artifact and listed on
+[Artifact Hub](https://artifacthub.io/packages/helm/wardn/wardn) - no cloning or
+image building needed. It provisions the backend, dashboard, and (by default) a
 persistent Postgres, generates its own secrets, and templates the dashboard
 proxy. Images are public on GHCR.
 
