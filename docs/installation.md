@@ -69,7 +69,7 @@ Fire a deploy marker (analysis runs after the after-window):
 ### 1. Verify the chart (no login needed)
 
 ```bash
-helm show chart oci://ghcr.io/happymooguild/charts/wardn --version 0.1.0
+helm show chart oci://ghcr.io/happymooguild/charts/wardn --version 1.0.0
 ```
 
 If that prints the chart metadata, the public OCI path is working.
@@ -78,7 +78,7 @@ If that prints the chart metadata, the public OCI path is working.
 
 ```bash
 helm install wardn oci://ghcr.io/happymooguild/charts/wardn \
-  --version 0.1.0 \
+  --version 1.0.0 \
   --namespace wardn --create-namespace \
   --set signoz.url=http://signoz.signoz.svc.cluster.local:8080 \
   --set signoz.apiKey='<minted-service-account-key>' \
@@ -116,7 +116,7 @@ kubectl -n wardn port-forward svc/wardn-frontend 8088:80
 ### 4. Expose with Ingress + TLS
 
 ```bash
-helm upgrade wardn oci://ghcr.io/happymooguild/charts/wardn --version 0.1.0 \
+helm upgrade wardn oci://ghcr.io/happymooguild/charts/wardn --version 1.0.0 \
   --namespace wardn --reuse-values \
   --set ingress.enabled=true \
   --set ingress.className=nginx \

@@ -19,10 +19,10 @@ Postgres for wardn's own history.
   build and push them, then point `backend.image` / `frontend.image` at your
   registry:
   ```bash
-  docker build -t <registry>/wardn-backend:0.1.0 .
-  docker build -t <registry>/wardn-frontend:0.1.0 ./frontend
-  docker push <registry>/wardn-backend:0.1.0
-  docker push <registry>/wardn-frontend:0.1.0
+  docker build -t <registry>/wardn-backend:1.0.0 .
+  docker build -t <registry>/wardn-frontend:1.0.0 ./frontend
+  docker push <registry>/wardn-backend:1.0.0
+  docker push <registry>/wardn-frontend:1.0.0
   ```
 
 ## Install

@@ -4,8 +4,8 @@ description: Deploy-aware observability - detect when a version regresses agains
 type: application
 # version  = chart version (bump on every chart change)
 # appVersion = the wardn app/image version this chart defaults to
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: "1.0.0"
 keywords:
   - observability
   - deploy
@@ -25,9 +25,9 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: backend
-      image: ghcr.io/happymooguild/wardn-backend:0.1.0
+      image: ghcr.io/happymooguild/wardn-backend:1.0.0
     - name: frontend
-      image: ghcr.io/happymooguild/wardn-frontend:0.1.0
+      image: ghcr.io/happymooguild/wardn-frontend:1.0.0
   artifacthub.io/links: |
     - name: Source
       url: https://github.com/happymooguild/wardn

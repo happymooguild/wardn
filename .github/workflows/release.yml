@@ -1,11 +1,11 @@
 # Build and publish the wardn images and Helm chart on a version tag.
 #
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v1.0.0 && git push origin v1.0.0
 #
 # Produces, all at the same version:
-#   ghcr.io/<owner>/wardn-backend:0.1.0   (+ 0.1, latest)
-#   ghcr.io/<owner>/wardn-frontend:0.1.0  (+ 0.1, latest)
-#   oci://ghcr.io/<owner>/charts/wardn    (chart 0.1.0)
+#   ghcr.io/<owner>/wardn-backend:1.0.0   (+ 1.0, latest)
+#   ghcr.io/<owner>/wardn-frontend:1.0.0  (+ 1.0, latest)
+#   oci://ghcr.io/<owner>/charts/wardn    (chart 1.0.0)
 #
 # Uses the built-in GITHUB_TOKEN - no PAT needed. The published packages start
 # PRIVATE; make them public once (GitHub -> Packages -> package -> visibility).
