@@ -72,21 +72,9 @@ can explain why.
 
 ## How it works
 
-```
-  CI / ArgoCD ──POST /api/v1/deployments──►  Marker API  ──►  Analyzer
-   (per-app key, on healthy rollout)            │                │
-                                                │                │ PromQL, before & after
-                                                ▼                ▼   window, filtered by version
-                                            Postgres  ◄────  SigNoz (metrics · logs · traces)
-                                          (events, snapshots,      │
-                                           logs/traces, analyses)  │ regression?
-                                                │                  ├──► Slack / webhook alert
-                                                ▼                  └──► LLM root-cause (Ask AI)
-                                          Dashboard / API              Claude · OpenAI · Gemini
-```
+<img width="2560" height="1886" alt="Wardn Architecture-selection" src="https://github.com/user-attachments/assets/b4a767a2-5831-40c0-bf95-c289098d58bd" />
 
-A visual version of this lives in [`docs/`](docs/) and the
-[design doc](docs/design-doc.md).
+For more details checkout [`docs/`](docs/).
 
 ## Quickstart
 
