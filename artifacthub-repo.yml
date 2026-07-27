@@ -1,13 +1,10 @@
-# Artifact Hub repository metadata - proves you own this chart repo so the
-# listing shows a "Verified Publisher" badge.
+# Artifact Hub repository metadata - proves ownership of this OCI chart repo so
+# the listing shows the "Verified Publisher" badge.
 #
-# 1. Add the repo on artifacthub.io first; it will show a repositoryID.
-# 2. Paste that ID below and fill in owners.
-# 3. For an OCI-hosted chart, push this file to the registry so Artifact Hub
-#    can read it (see: https://artifacthub.io/docs/topics/repositories/#oci-registries):
-#      oras push ghcr.io/happymooguild/charts/wardn:artifacthub.io \
-#        artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
-repositoryID: ""
+# This file is pushed to the registry (not just committed) by the
+# .github/workflows/artifacthub-metadata.yml workflow, which Artifact Hub then
+# reads from ghcr.io/happymooguild/charts/wardn:artifacthub.io on its next scan.
+repositoryID: d62e4d26-e40f-4551-a9a8-51796d94a425
 owners:
   - name: "Shubham Singh"
-    email: "you@example.com"
+    email: "shubhammahar1306@gmail.com"
