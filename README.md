@@ -108,23 +108,31 @@ still work; analyzer jobs fail until SigNoz is configured.
 
 ### Kubernetes (Helm)
 
-The production chart is [`charts/wardn`](charts/wardn) - it provisions the
-backend, dashboard, and (by default) a persistent Postgres, generates its own
-secrets, and templates the dashboard proxy.
+The chart is published to GHCR as an OCI artifact - no cloning or image
+building needed. It provisions the backend, dashboard, and (by default) a
+persistent Postgres, generates its own secrets, and templates the dashboard
+proxy. Images are public on GHCR.
 
 ```bash
-helm install wardn ./charts/wardn \
+helm install wardn oci://ghcr.io/happymooguild/charts/wardn \
+  --version 0.1.0 \
   --namespace wardn --create-namespace \
-  --set backend.image.repository=<registry>/wardn-backend \
-  --set frontend.image.repository=<registry>/wardn-frontend \
   --set signoz.url=http://signoz.signoz.svc.cluster.local:8080 \
-  --set signoz.apiKey=<minted-service-account-key> \
-  --set auth.adminPassword=<a-strong-password>
+  --set signoz.apiKey='<minted-service-account-key>' \
+  --set auth.adminPassword='<a-strong-password>'
 ```
 
-See the [chart README](charts/wardn/README.md) for Ingress, TLS, external
-Postgres, and `existingSecret` options. (The `deploy/helm/wardn` chart is a demo
-skeleton for the kind / e2e scripts - use `charts/wardn` for a real install.)
+Then port-forward to try it (default service is ClusterIP):
+
+```bash
+kubectl -n wardn port-forward svc/wardn-frontend 8088:80
+# open http://localhost:8088  → log in as  admin / <the password you set>
+```
+
+Full walkthrough - Ingress + TLS, external Postgres, `existingSecret`, upgrades,
+and troubleshooting - is in **[docs/installation.md](docs/installation.md)** and
+the [chart README](charts/wardn/README.md). (The `deploy/helm/wardn` chart is a
+demo skeleton for the kind / e2e scripts - use the OCI chart for a real install.)
 
 ## CI / ArgoCD integration
 
@@ -210,6 +218,20 @@ docker compose up --build
 | `WARDN_SECRET_KEY` | Encrypts UI-stored AI keys at rest. Unset ⇒ the UI can't save keys |
 
 Full Helm defaults live in [`charts/wardn/values.yaml`](charts/wardn/values.yaml).
+
+## Tech stack
+
+| Layer | Choices |
+|---|---|
+| **Backend** | Go 1.25, [Gin](https://github.com/gin-gonic/gin) HTTP, `gin-contrib/sessions` (cookie auth), `lib/pq` Postgres driver, `golang.org/x/crypto` (bcrypt) |
+| **Store** | PostgreSQL 16 - deploy events, before/after snapshots, logs & traces, AI analyses, dashboards, RBAC, alert configs |
+| **Telemetry source** | [SigNoz](https://signoz.io/) - PromQL over `/api/v5/query_range` for metrics, the raw builder for logs & traces, `/api/v2/metrics` for discovery |
+| **AI** | Pluggable providers with structured output - Anthropic (Claude, `anthropic-sdk-go`), OpenAI, and Google Gemini (OpenAI-compatible endpoint) |
+| **Frontend** | React 18 + Vite 5, served by nginx which reverse-proxies `/api` to the backend |
+| **Packaging** | Docker (distroless backend, nginx frontend), Helm chart shipped as an OCI artifact on GHCR |
+| **Runtime** | Kubernetes (Helm) or Docker Compose |
+| **CI** | GitHub Actions - multi-arch buildx to GHCR + OCI chart publish on version tags |
+| **Demo stack** | kind, ArgoCD (+ Notifications), Gitea; a sample app emits OTLP metrics, logs, and traces |
 
 ## Layout
 
