@@ -17,7 +17,7 @@
   <img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-Helm-326CE5?style=flat-square&logo=kubernetes&logoColor=white">
   <img alt="SigNoz" src="https://img.shields.io/badge/powered%20by-SigNoz-e34e2f?style=flat-square">
   <img alt="AI" src="https://img.shields.io/badge/AI-Claude%20%C2%B7%20OpenAI%20%C2%B7%20Gemini-8A63D3?style=flat-square">
-  <a href="https://www.youtube.com/watch?v=ahsQLtxf06I"><img alt="demo" src="https://img.shields.io/badge/%E2%96%B6%20watch-demo-FF0000?style=flat-square&logo=youtube&logoColor=white"></a>
+  <a href="https://www.youtube.com/watch?v=zYLxw7AAoWg"><img alt="demo" src="https://img.shields.io/badge/%E2%96%B6%20watch-demo-FF0000?style=flat-square&logo=youtube&logoColor=white"></a>
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-63d397?style=flat-square"></a>
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-63d397?style=flat-square">
 </p>
@@ -27,7 +27,7 @@
 ## Demo
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=ahsQLtxf06I">
+  <a href="https://www.youtube.com/watch?v=zYLxw7AAoWg">
     <img src="https://img.youtube.com/vi/ahsQLtxf06I/hqdefault.jpg" alt="Watch the wardn demo" width="640">
   </a>
 </p>
