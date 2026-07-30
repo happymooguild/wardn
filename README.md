@@ -74,7 +74,7 @@ can explain why.
 
 <img width="2560" height="1886" alt="Wardn Architecture-selection" src="https://github.com/user-attachments/assets/b4a767a2-5831-40c0-bf95-c289098d58bd" />
 
-For more details checkout [`docs/`](docs/).
+For more details checkout [`docs`](docs/).
 
 ## Quickstart
 
